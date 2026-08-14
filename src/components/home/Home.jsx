@@ -1,134 +1,354 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom'
+import React, { useEffect, useState } from 'react'
 import { MdFormatListBulleted, MdOutlineNewReleases, MdPendingActions, MdTaskAlt } from 'react-icons/md'
 import './Home.css'
-import Tickets from '../tickets/Tickets';
-import { getTickets, countTickets } from '../../api/tickets';
-import Grafico from '../grafico/Grafico'; // Importando o componente de gráfico  
+import { getTickets, countTickets } from '../../api/tickets'
+import Grafico from '../grafico/Grafico'
 
+const EMPTY_TICKET_COUNTS = {
+  all: 0,
+  new: 0,
+  pending: 0,
+  completed: 0
+}
 
+const DASHBOARD_REFRESH_INTERVAL = 30000
 
-const Home = () => {
-    const navigate = useNavigate()
-    const [showTickets, setShowTickets] = useState(false);
-    const [selectedFilter, setSelectedFilter] = useState(null);
-    const [ticketCounts, setTicketCounts] = useState({
-        all: 0,
-        new: 0,
-        pending: 0,
-        completed: 0
-    });
+const STATUS_GROUPS = {
+  new: ['doing', 'in_progress', 'em_andamento', 'andamento'],
+  pending: ['pending', 'pendente', 'pendentes', 'open', 'aberto'],
+  completed: ['conclued', 'concluded', 'completed', 'done', 'concluido', 'concluidos', 'fechado']
+}
 
-    useEffect(() => {
-        const fetchTicketCounts = async () => {
-            try {
-                const response = await countTickets();
-                setTicketCounts({
-                    all: response.data.total || 0,
-                    new: response.data.doing || 0, // 'doing' no backend corresponde a 'new' no front
-                    pending: response.data.pending || 0,
-                    completed: response.data.conclued || 0, // 'conclued' no backend corresponde a 'completed' no front
-                });
-            } catch (error) {
-                console.error('Erro ao buscar contagem de tickets:', error);
-            }
-        };
+const normalizeStatus = (status) => String(status || '')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .trim()
+  .toLowerCase()
+  .replace(/[\s-]+/g, '_')
 
-        fetchTicketCounts();
-    }, []);
+const extractTickets = (response) => {
+  const possibleLists = [
+    response?.data?.data?.tickets,
+    response?.data?.tickets,
+    response?.tickets,
+    response?.data?.data,
+    response?.data,
+    response
+  ]
 
-    const handleTicketClick = (status) => {
-        setSelectedFilter(status);
-        setShowTickets(true);
-    };
+  return possibleLists.find(Array.isArray) ?? []
+}
 
-    const handleBackToHome = () => {
-        setShowTickets(false);
-        setSelectedFilter(null);
-    };
+const getTicketIdentifier = (ticket) => (
+  ticket?.id ??
+  ticket?._id ??
+  ticket?.ticketId ??
+  ticket?.ticket_id ??
+  ticket?.tickt_id ??
+  null
+)
 
-    const getNomeUsuario = () => {
-        const usuarioLogado = JSON.parse(localStorage.getItem('usuario')); // Converte a string JSON para objeto
-        const nomePadrao = 'Usuário';
+const getTicketUpdateTimestamp = (ticket) => {
+  const date = (
+    ticket?.updatedAt ??
+    ticket?.updated_at ??
+    ticket?.modifiedAt ??
+    ticket?.modified_at ??
+    ticket?.date
+  )
+  const timestamp = new Date(date).getTime()
 
-        if (usuarioLogado) {
-            console.log('Usuário logado:', usuarioLogado);
-            return usuarioLogado.nome || usuarioLogado.name || nomePadrao;
-        }
+  return Number.isFinite(timestamp) ? timestamp : 0
+}
 
-        console.log('Nenhum usuário logado');
-        return nomePadrao;
-    };
+/**
+ * Garante que cada chamado seja contado uma única vez. Caso a API devolva
+ * versões repetidas do mesmo ID após uma mudança de status, conserva a mais
+ * recente para que o chamado apenas mude de categoria.
+ */
+const getUniqueTickets = (tickets) => {
+  const ticketsById = new Map()
+  const ticketsWithoutId = []
 
-    if (showTickets) {
-        return (
-            <div>
-                <button className="back-button" onClick={handleBackToHome}>
-                    ← Voltar para Dashboard
-                </button>
-                <Tickets initialFilter={selectedFilter} />
-            </div>
-        );
+  tickets.forEach((ticket) => {
+    const identifier = getTicketIdentifier(ticket)
+
+    if (identifier === null || identifier === undefined || identifier === '') {
+      ticketsWithoutId.push(ticket)
+      return
     }
 
-    return (
-        <div className="home-container">
-            <div className="name-title">
-                <h2>Bem-vindo {getNomeUsuario()}</h2>
+    const key = String(identifier)
+    const currentTicket = ticketsById.get(key)
+
+    if (
+      !currentTicket ||
+      getTicketUpdateTimestamp(ticket) >= getTicketUpdateTimestamp(currentTicket)
+    ) {
+      ticketsById.set(key, ticket)
+    }
+  })
+
+  return [...ticketsById.values(), ...ticketsWithoutId]
+}
+
+const getTicketTimestamp = (ticket) => {
+  const date = ticket?.date ?? ticket?.createdAt ?? ticket?.created_at
+  const timestamp = new Date(date).getTime()
+
+  return Number.isFinite(timestamp) ? timestamp : 0
+}
+
+const formatTicketDate = (ticket) => {
+  const timestamp = getTicketTimestamp(ticket)
+
+  return timestamp
+    ? new Date(timestamp).toLocaleDateString('pt-BR')
+    : '—'
+}
+
+const getRecentTickets = (tickets) => tickets
+  .map((ticket, index) => ({ ticket, index }))
+  .sort((first, second) => (
+    getTicketTimestamp(second.ticket) - getTicketTimestamp(first.ticket) || first.index - second.index
+  ))
+  .slice(0, 5)
+  .map(({ ticket }) => ticket)
+
+const calculateCountsFromTickets = (tickets) => tickets.reduce((counts, ticket) => {
+  const status = normalizeStatus(
+    ticket?.tickt_status ?? ticket?.status ?? ticket?.situacao
+  )
+
+  counts.all += 1
+
+  if (STATUS_GROUPS.new.includes(status)) counts.new += 1
+  else if (STATUS_GROUPS.pending.includes(status)) counts.pending += 1
+  else if (STATUS_GROUPS.completed.includes(status)) counts.completed += 1
+
+  return counts
+}, { ...EMPTY_TICKET_COUNTS })
+
+const getApiCount = (source, keys) => {
+  for (const key of keys) {
+    const rawValue = source?.[key]
+    const value = Number(rawValue)
+
+    if (rawValue !== undefined && rawValue !== null && rawValue !== '' && Number.isFinite(value) && value >= 0) {
+      return value
+    }
+  }
+
+  return null
+}
+
+const normalizeApiCounts = (response, calculatedCounts) => {
+  const source = response?.data?.data ?? response?.data ?? response ?? {}
+  const newCount = getApiCount(source, ['doing', 'inProgress', 'in_progress', 'new', 'andamento'])
+  const pending = getApiCount(source, ['pending', 'pendentes', 'pendente', 'open'])
+  const completed = getApiCount(source, ['conclued', 'concluded', 'completed', 'done'])
+  const categoryTotal = (newCount ?? 0) + (pending ?? 0) + (completed ?? 0)
+
+  return {
+    all: getApiCount(source, ['total', 'all']) ?? Math.max(calculatedCounts.all, categoryTotal),
+    new: newCount ?? calculatedCounts.new,
+    pending: pending ?? calculatedCounts.pending,
+    completed: completed ?? calculatedCounts.completed
+  }
+}
+
+const Home = ({ onNavigate }) => {
+  const [ticketCounts, setTicketCounts] = useState(EMPTY_TICKET_COUNTS)
+  const [allTickets, setAllTickets] = useState([])
+  const [recentTickets, setRecentTickets] = useState([])
+  const [loadingTickets, setLoadingTickets] = useState(true)
+  const [reloadVersion, setReloadVersion] = useState(0)
+
+  useEffect(() => {
+    let active = true
+    setLoadingTickets(true)
+
+    const fetchDashboardData = async () => {
+      const [countsResult, ticketsResult] = await Promise.allSettled([
+        countTickets(),
+        getTickets()
+      ])
+
+      const tickets = ticketsResult.status === 'fulfilled'
+        ? getUniqueTickets(extractTickets(ticketsResult.value))
+        : []
+      const calculatedCounts = calculateCountsFromTickets(tickets)
+      const fallbackCounts = countsResult.status === 'fulfilled'
+        ? normalizeApiCounts(countsResult.value, EMPTY_TICKET_COUNTS)
+        : EMPTY_TICKET_COUNTS
+
+      if (countsResult.status === 'rejected') {
+        console.error('Erro ao buscar a contagem de tickets:', countsResult.reason)
+      }
+
+      if (ticketsResult.status === 'rejected') {
+        console.error('Erro ao buscar a lista de tickets:', ticketsResult.reason)
+      }
+
+      if (active && ticketsResult.status === 'fulfilled') {
+        setTicketCounts(calculatedCounts)
+      } else if (active && countsResult.status === 'fulfilled') {
+        setTicketCounts(fallbackCounts)
+      }
+
+      if (active && ticketsResult.status === 'fulfilled') {
+        setAllTickets(tickets)
+        setRecentTickets(getRecentTickets(tickets))
+      }
+
+      if (active) {
+        setLoadingTickets(false)
+      }
+    }
+
+    fetchDashboardData()
+    const refreshInterval = window.setInterval(fetchDashboardData, DASHBOARD_REFRESH_INTERVAL)
+    window.addEventListener('focus', fetchDashboardData)
+
+    return () => {
+      active = false
+      window.clearInterval(refreshInterval)
+      window.removeEventListener('focus', fetchDashboardData)
+    }
+  }, [reloadVersion])
+
+  const handleTicketClick = (status) => {
+    onNavigate?.('tickets', { initialFilter: status })
+  }
+
+  const reloadDashboard = () => setReloadVersion((version) => version + 1)
+
+  const renderStatusBadge = (status) => {
+    const normalized = String(status || '').toLowerCase()
+
+    if (normalized.includes('doing') || normalized.includes('em andamento')) {
+      return <span className="status-badge in-progress">Em andamento</span>
+    }
+
+    if (normalized.includes('pending') || normalized.includes('pendente')) {
+      return <span className="status-badge pending">Pendente</span>
+    }
+
+    if (normalized.includes('conclued') || normalized.includes('concluído') || normalized.includes('conclud')) {
+      return <span className="status-badge completed">Concluído</span>
+    }
+
+    return <span className="status-badge other">Aguardando</span>
+  }
+
+  return (
+    <div className="home-container">
+
+      <section className="stats-grid">
+        <article className="stat-card stat-total" onClick={() => handleTicketClick(null)}>
+          <div className="stat-card-top">
+            <span>Total de Chamados</span>
+            <div className="stat-icon">
+              <MdFormatListBulleted />
             </div>
-            <div className="dashboard-buttons">
-                <button
-                    className="dashboard-button all"
-                    onClick={() => handleTicketClick(null)}
-                >
-                    <MdFormatListBulleted className="button-icon" />
-                    <div className="button-content">
-                        <span className="button-title">Todos os Chamados</span>
-                        <span className="button-count">{ticketCounts.all}</span>
-                    </div>
-                </button>
+          </div>
+          <div className="stat-value">{ticketCounts.all}</div>
+        </article>
 
-                <button
-                    className="dashboard-button new"
-                    onClick={() => handleTicketClick('doing')} // Usando 'doing' que é o nome no backend
-                >
-                    <MdOutlineNewReleases className="button-icon" />
-                    <div className="button-content">
-                        <span className="button-title">Em Andamento</span>
-                        <span className="button-count">{ticketCounts.new}</span>
-                    </div>
-                </button>
-
-                <button
-                    className="dashboard-button pending"
-                    onClick={() => handleTicketClick('pending')}
-                >
-                    <MdPendingActions className="button-icon" />
-                    <div className="button-content">
-                        <span className="button-title">Chamados Pendentes</span>
-                        <span className="button-count">{ticketCounts.pending}</span>
-                    </div>
-                </button>
-
-                <button
-                    className="dashboard-button completed"
-                    onClick={() => handleTicketClick('conclued')} // Usando 'conclued' que é o nome no backend
-                >
-                    <MdTaskAlt className="button-icon" />
-                    <div className="button-content">
-                        <span className="button-title">Chamados Concluídos</span>
-                        <span className="button-count">{ticketCounts.completed}</span>
-                    </div>
-                </button>
+        <article className="stat-card stat-in-progress" onClick={() => handleTicketClick('doing')}>
+          <div className="stat-card-top">
+            <span>Em Andamento</span>
+            <div className="stat-icon">
+              <MdOutlineNewReleases />
             </div>
+          </div>
+          <div className="stat-value">{ticketCounts.new}</div>
+        </article>
 
-            <div className="grafico-container">
-                <Grafico />
+        <article className="stat-card stat-pending" onClick={() => handleTicketClick('pending')}>
+          <div className="stat-card-top">
+            <span>Pendentes</span>
+            <div className="stat-icon">
+              <MdPendingActions />
             </div>
+          </div>
+          <div className="stat-value">{ticketCounts.pending}</div>
+        </article>
 
+        <article className="stat-card stat-completed" onClick={() => handleTicketClick('conclued')}>
+          <div className="stat-card-top">
+            <span>Concluídos</span>
+            <div className="stat-icon">
+              <MdTaskAlt />
+            </div>
+          </div>
+          <div className="stat-value">{ticketCounts.completed}</div>
+        </article>
+      </section>
+
+      <section className="panel-card">
+        <div className="panel-header">
+          <h2>Painel de Desempenho e Histórico</h2>
         </div>
-        
-    )
+        <div className="panel-body">
+          <Grafico
+            chamados={allTickets}
+            contagens={{
+              total: ticketCounts.all,
+              doing: ticketCounts.new,
+              pending: ticketCounts.pending,
+              conclued: ticketCounts.completed
+            }}
+            carregando={loadingTickets}
+            onClearFilters={reloadDashboard}
+          />
+        </div>
+      </section>
+
+      <section className="panel-card panel-table">
+        <div className="panel-header">
+          <h2>Chamados Recentes</h2>
+          <button className="view-all-button" onClick={() => handleTicketClick(null)}>Ver todos</button>
+        </div>
+
+        <div className="recent-table">
+          <div className="table-row table-head">
+            <span>Chamado</span>
+            <span>Status</span>
+            <span>Usuários</span>
+            <span>Data criação</span>
+          </div>
+
+          {loadingTickets ? (
+            <div className="table-loading">Carregando chamados...</div>
+          ) : recentTickets.length === 0 ? (
+            <div className="table-empty">Nenhum chamado recente disponível.</div>
+          ) : (
+            recentTickets.map((item) => (
+              <div key={item.id || item._id || `${item.date}-${item.name}`} className="table-row table-item">
+                <div className="table-cell ticket-title-cell">
+                  <span className="ticket-date">
+                    {formatTicketDate(item)}
+                  </span>
+                  <strong>{item.name || item.item || 'Centro Chamado'}</strong>
+                </div>
+                <div className="table-cell status-cell">
+                  {renderStatusBadge(item.tickt_status ?? item.status)}
+                </div>
+                <div className="table-cell user-cell">
+                  <div className="user-badge">P</div>
+                  <span>{item.author || 'Paula Master'}</span>
+                </div>
+                <div className="table-cell">
+                  {formatTicketDate(item)}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </section>
+    </div>
+  )
 }
 
 export default Home

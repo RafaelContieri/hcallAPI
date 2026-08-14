@@ -15,14 +15,11 @@ async function createUser(userData) {
         }
 
         const fullUrl = `${API_URL}/user/`;
-        console.log('[createUser] URL completa:', fullUrl);
 
         const dataToSend = {
             ...userData,
             role: userData.role || 'user' // Valor padrão 'user'
         };
-
-        console.log('[createUser] Dados sendo enviados:', dataToSend);
 
         const response = await fetch(fullUrl, {
             method: 'POST',
@@ -35,27 +32,34 @@ async function createUser(userData) {
             body: JSON.stringify(dataToSend)
         });
 
-        // Tratamento específico para status 400 (Bad Request)
-        if (response.status === 400) {
-            const errorText = await response.text();
-            try {
-                const errorData = JSON.parse(errorText);
-                console.error('[createUser] Erro 400 detalhado:', errorData);
-                throw new Error(errorData.message || 'Dados inválidos enviados ao servidor');
-            } catch {
-                console.error('[createUser] Erro 400 (texto):', errorText);
-                throw new Error(errorText || 'Requisição inválida');
-            }
-        }
-
         if (!response.ok) {
             const errorText = await response.text();
-            console.error('[createUser] Erro HTTP:', response.status, errorText);
-            throw new Error(`Erro ${response.status}: ${errorText}`);
+            let errorMessage = errorText;
+
+            try {
+                const errorData = JSON.parse(errorText);
+                errorMessage = errorData.message || errorData.error || errorText;
+            } catch {
+                // Mantém a mensagem textual retornada pelo endpoint.
+            }
+
+            if (response.status === 401) {
+                localStorage.removeItem('@token');
+            }
+
+            throw new Error(errorMessage || `Não foi possível criar o usuário (${response.status})`);
         }
 
-        const data = await response.json();
-        console.log('[createUser] Resposta do servidor:', data);
+        const responseText = await response.text();
+        let data = {};
+
+        if (responseText) {
+            try {
+                data = JSON.parse(responseText);
+            } catch {
+                data = { message: responseText };
+            }
+        }
 
         return {
             success: true,
@@ -65,8 +69,7 @@ async function createUser(userData) {
         console.error('[createUser] Erro completo:', error);
         return {
             success: false,
-            error: error.message || 'Erro ao criar usuário',
-            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+            error: error.message || 'Erro ao criar usuário'
         };
     }
 }

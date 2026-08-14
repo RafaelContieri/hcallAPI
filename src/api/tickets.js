@@ -2,7 +2,6 @@ import axios from 'axios';
 
 // URL base da API obtida das variáveis de ambiente
 const API_URL = import.meta.env.VITE_API_URL;
-// const PROXY_URL = "https://cors-anywhere.herokuapp.com/";
 
 // Cria uma instância do axios com configurações padrão
 const api = axios.create({
@@ -110,7 +109,7 @@ async function addAnotacao(ticketId, texto) {
   }
 
   try {
-    const response = await api.put('/ticket/protected/', {
+    await api.put('/ticket/protected/', {
       id: ticketId,
       return: texto,
       data: new Date().toISOString()
@@ -134,25 +133,46 @@ async function addAnotacao(ticketId, texto) {
  * @returns {Promise<Object>} - Retorna o ticket atualizado
  * @throws {Error} - Se o ticket for inválido ou ocorrer um erro na requisição
  */
+const STATUS_ATUALIZAVEIS = ['doing', 'conclued'];
+
+const updateTicketStatus = async (ticketId, status) => {
+  if (!ticketId) {
+    throw new Error('ID do ticket não fornecido');
+  }
+
+  if (!STATUS_ATUALIZAVEIS.includes(status)) {
+    throw new Error('Status do ticket inválido');
+  }
+
+  try {
+    const response = await api.patch('/ticket/protected/', {
+      id: ticketId,
+      status
+    });
+
+    const responseTicket =
+      response.data?.data?.ticket ??
+      response.data?.ticket ??
+      response.data?.data ??
+      response.data;
+
+    return {
+      ...(responseTicket && typeof responseTicket === 'object' ? responseTicket : {}),
+      id: responseTicket?.id ?? ticketId,
+      status: responseTicket?.status ?? responseTicket?.tickt_status ?? status,
+      tickt_status: responseTicket?.tickt_status ?? responseTicket?.status ?? status
+    };
+  } catch (error) {
+    throw new Error(error.response?.data?.message || 'Erro ao atualizar status do ticket');
+  }
+};
+
 const handleIniciarTicket = async (ticket) => {
   if (!ticket?.id) {
     throw new Error('Ticket inválido');
   }
 
-  try {
-    const response = await api.patch('/ticket/protected/', {
-      Authorization: localStorage.getItem('@token'),
-      id: ticket.id,
-      status: "doing"
-    });
-
-    return {
-      id: ticket.id,
-      status: "doing"
-    };
-  } catch (error) {
-    throw new Error(error.response?.data?.message || 'Erro ao iniciar ticket');
-  }
+  return updateTicketStatus(ticket.id, 'doing');
 };
 
 /**
@@ -166,19 +186,7 @@ const handleConcluirTicket = async (ticket) => {
     throw new Error('Ticket inválido');
   }
 
-  try {
-    const response = await api.patch('/ticket/protected/', {
-      id: ticket.id,
-      status: "conclued"
-    });
-
-    return {
-      id: ticket.id,
-      status: "conclued"
-    };
-  } catch (error) {
-    throw new Error(error.response?.data?.message || 'Erro ao concluir ticket');
-  }
+  return updateTicketStatus(ticket.id, 'conclued');
 };
 
 
@@ -220,6 +228,7 @@ export {
   getTicketDetails,
   formatarData,
   addAnotacao,
+  updateTicketStatus,
   handleConcluirTicket,
   handleIniciarTicket,
   fetchTicketData

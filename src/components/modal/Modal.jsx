@@ -38,6 +38,14 @@ const Modal = ({
                             
                         </button>
                     </div>
+
+                    <div>
+                        djkcjklsdnclsd
+                        cvnsdvnsdlv
+                        dvjsdvsdjv
+
+                        sidebar
+                    </div>
                 </div>
             </div>
         </div>

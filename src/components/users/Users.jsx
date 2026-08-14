@@ -4,7 +4,7 @@ import AccountCreate from '../account-create/Account-create';
 import { getUsers, deleteUser } from '../../api/createUser';
 import Modal from '../modal/Modal';
 
-const Users = ({ onEditUser }) => {
+const Users = () => {
     const [users, setUsers] = useState([]);
     const [showCreateAccount, setShowCreateAccount] = useState(false);
     const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -77,12 +77,10 @@ const Users = ({ onEditUser }) => {
 
     if (showCreateAccount) {
         return (
-            <div>
-                <button className="back-button" onClick={handleBackToUsers}>
-                    ← Voltar para lista
-                </button>
-                <AccountCreate />
-            </div>
+            <AccountCreate
+                onCancel={handleBackToUsers}
+                onCreated={handleBackToUsers}
+            />
         );
     }
 

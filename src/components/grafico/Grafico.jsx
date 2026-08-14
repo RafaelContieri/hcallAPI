@@ -1,166 +1,306 @@
-import React, { useEffect, useState } from 'react';
-import { countTickets } from '../../api/tickets';
-// import styles from '../grafico/styles';
-import styles from './styles.module.css'; // Importando o CSS do componente
+import React, { useEffect, useMemo, useState } from 'react'
+import { countTickets } from '../../api/tickets'
+import styles from './styles.module.css'
 
-const Grafico = () => {
-  // Estado inicial com estrutura correta e valores padrão
-  const [chartData, setChartData] = useState([
-    { status: 'Total', value: 0, color: '#4e73df' },
-    { status: 'Em andamento', value: 0, color: '#1cc88a' },
-    { status: 'Pendentes', value: 0, color: '#f6c23e' },
-    { status: 'Concluídos', value: 0, color: '#e74a3b' }
-  ]);
-  
-  const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState({
-    startDate: '',
-    endDate: ''
-  });
+const SERIES = [
+  { key: 'total', label: 'Total', color: '#1f3d63' },
+  { key: 'doing', label: 'Em Andamento', color: '#12aee0' },
+  { key: 'pending', label: 'Pendentes', color: '#f7ad00' },
+  { key: 'conclued', label: 'Concluídos', color: '#08be83' }
+]
 
-  // Efeito para buscar os dados ao montar o componente
-  useEffect(() => {
-    fetchData();
-  }, []); // Array de dependências vazio para rodar apenas uma vez
+const EMPTY_COUNTS = {
+  total: 0,
+  doing: 0,
+  pending: 0,
+  conclued: 0
+}
 
-  // Função assíncrona para buscar os dados da API
-  const fetchData = async (filterParams = {}) => {
-    setLoading(true); // Ativa o estado de carregamento
-    try {
-      const result = await countTickets(filterParams);
-      console.log('Dados recebidos da API:', result); // Log do objeto completo retornado pela API
+const EMPTY_FILTERS = {
+  startDate: '',
+  endDate: ''
+}
 
-      // Atualiza o estado do gráfico com os dados da API
-      // Acessamos 'result.data' pois a API retorna os contadores aninhados
-      setChartData([
-        { 
-          status: 'Total', 
-          value: result.data?.total || 0, // Garante que o valor é 0 se for null/undefined
-          color: '#4e73df' 
-        },
-        { 
-          status: 'Em andamento', 
-          value: result.data?.doing || 0,
-          color: '#1cc88a' 
-        },
-        { 
-          status: 'Pendentes', 
-          value: result.data?.pending || 0,
-          color: '#f6c23e' 
-        },
-        { 
-          status: 'Concluídos', 
-          value: result.data?.conclued || 0,
-          color: '#e74a3b' 
-        }
-      ]);
-      
-    } catch (error) {
-      console.error("Erro ao buscar dados:", error); // Log de erros na requisição
-    } finally {
-      setLoading(false); // Desativa o estado de carregamento, independentemente do sucesso/erro
+const toCount = (value) => {
+  const number = Number(value)
+  return Number.isFinite(number) && number > 0 ? number : 0
+}
+
+const getFirstCount = (source, keys) => {
+  const key = keys.find((item) => source?.[item] !== undefined)
+  return key ? toCount(source[key]) : 0
+}
+
+const normalizeStatus = (status) => String(status || '')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .trim()
+  .toLowerCase()
+  .replace(/[\s-]+/g, '_')
+
+const getTicketTimestamp = (ticket) => {
+  const date = ticket?.date ?? ticket?.createdAt ?? ticket?.created_at
+  const timestamp = new Date(date).getTime()
+
+  return Number.isFinite(timestamp) ? timestamp : null
+}
+
+/**
+ * Calcula as séries do gráfico a partir de uma lista de chamados.
+ * Aceita os campos `status`, `tickt_status` ou `situacao`.
+ */
+const calcularChamados = (chamados = []) => {
+  if (!Array.isArray(chamados)) return EMPTY_COUNTS
+
+  return chamados.reduce((counts, chamado) => {
+    const status = normalizeStatus(
+      chamado?.tickt_status ?? chamado?.status ?? chamado?.situacao
+    )
+
+    counts.total += 1
+
+    if (['doing', 'in_progress', 'em_andamento', 'andamento'].includes(status)) {
+      counts.doing += 1
+    } else if (['pending', 'pendente', 'pendentes', 'open', 'aberto'].includes(status)) {
+      counts.pending += 1
+    } else if (
+      ['conclued', 'concluded', 'completed', 'done', 'concluido', 'concluidos', 'fechado'].includes(status)
+    ) {
+      counts.conclued += 1
     }
-  };
 
-  // Lida com a mudança nos campos de filtro
-  const handleFilterChange = (e) => {
-    const { name, value } = e.target;
-    setFilters(prev => ({ ...prev, [name]: value }));
-  };
+    return counts
+  }, { ...EMPTY_COUNTS })
+}
 
-  // Aplica os filtros ao enviar o formulário
-  const applyFilters = (e) => {
-    e.preventDefault(); // Previne o recarregamento da página
-    fetchData(filters); // Chama a API com os filtros atuais
-  };
+const normalizeCounts = (payload) => {
+  const source = payload?.data?.data ?? payload?.data ?? payload ?? {}
+  const doing = getFirstCount(source, ['doing', 'inProgress', 'in_progress', 'new', 'andamento'])
+  const pending = getFirstCount(source, ['pending', 'pendentes', 'pendente', 'open'])
+  const conclued = getFirstCount(source, ['conclued', 'concluded', 'completed', 'done'])
+  const informedTotal = getFirstCount(source, ['total', 'all'])
 
-  // Reseta os filtros e recarrega os dados sem filtros
-  const resetFilters = () => {
-    setFilters({ startDate: '', endDate: '' }); // Limpa os campos de filtro
-    fetchData(); // Recarrega os dados sem filtros
-  };
+  return {
+    total: informedTotal || doing + pending + conclued,
+    doing,
+    pending,
+    conclued
+  }
+}
 
-  // Calcula o valor máximo entre todos os tickets para escalonar as barras. Garante que é no mínimo 1.
-  const maxValue = Math.max(...chartData.map(item => item.value), 1);
+const getAxisMax = (highestValue) => {
+  if (highestValue <= 4) return Math.max(highestValue, 1)
+
+  const rawStep = highestValue / 4
+  const magnitude = 10 ** Math.floor(Math.log10(rawStep))
+  const normalizedStep = rawStep / magnitude
+  const niceStep = [1, 2, 2.5, 5, 10].find((step) => step >= normalizedStep) ?? 10
+
+  return niceStep * magnitude * 4
+}
+
+const formatTick = (value) => new Intl.NumberFormat('pt-BR', {
+  maximumFractionDigits: 2
+}).format(value)
+
+const Grafico = ({ chamados, contagens, carregando = false, onClearFilters }) => {
+  const hasReceivedData = Array.isArray(chamados) || contagens != null
+  const [apiCounts, setApiCounts] = useState(EMPTY_COUNTS)
+  const [loading, setLoading] = useState(!hasReceivedData)
+  const [error, setError] = useState('')
+  const [requestVersion, setRequestVersion] = useState(0)
+  const [filters, setFilters] = useState(EMPTY_FILTERS)
+
+  useEffect(() => {
+    let active = true
+
+    if (hasReceivedData) {
+      setLoading(false)
+      setError('')
+      return () => {
+        active = false
+      }
+    }
+
+    const fetchCounts = async () => {
+      setLoading(true)
+      setError('')
+
+      try {
+        const result = await countTickets()
+        if (active) setApiCounts(normalizeCounts(result))
+      } catch (fetchError) {
+        console.error('Erro ao buscar os dados do gráfico:', fetchError)
+        if (active) setError('Não foi possível carregar os dados do gráfico.')
+      } finally {
+        if (active) setLoading(false)
+      }
+    }
+
+    fetchCounts()
+
+    return () => {
+      active = false
+    }
+  }, [hasReceivedData, requestVersion])
+
+  const filteredTickets = useMemo(() => {
+    if (!Array.isArray(chamados)) return null
+
+    const startTimestamp = filters.startDate
+      ? new Date(`${filters.startDate}T00:00:00`).getTime()
+      : null
+    const endTimestamp = filters.endDate
+      ? new Date(`${filters.endDate}T23:59:59.999`).getTime()
+      : null
+
+    return chamados.filter((chamado) => {
+      if (startTimestamp !== null || endTimestamp !== null) {
+        const ticketTimestamp = getTicketTimestamp(chamado)
+
+        if (ticketTimestamp === null) return false
+        if (startTimestamp !== null && ticketTimestamp < startTimestamp) return false
+        if (endTimestamp !== null && ticketTimestamp > endTimestamp) return false
+      }
+
+      return true
+    })
+  }, [chamados, filters])
+
+  const counts = useMemo(() => {
+    const hasDateFilter = Boolean(filters.startDate || filters.endDate)
+
+    if (hasDateFilter && Array.isArray(filteredTickets)) return calcularChamados(filteredTickets)
+    if (contagens != null) return normalizeCounts(contagens)
+    if (Array.isArray(filteredTickets)) return calcularChamados(filteredTickets)
+    return apiCounts
+  }, [apiCounts, contagens, filteredTickets, filters.endDate, filters.startDate])
+
+  const chartData = useMemo(() => SERIES.map((series) => ({
+    ...series,
+    value: counts[series.key]
+  })), [counts])
+
+  const highestValue = Math.max(...chartData.map(({ value }) => value), 0)
+  const axisMax = getAxisMax(highestValue)
+  const ticks = Array.from({ length: 5 }, (_, index) => axisMax - (axisMax / 4) * index)
+  const chartDescription = chartData
+    .map(({ label, value }) => `${label}: ${formatTick(value)}`)
+    .join('. ')
+
+  const handleClearFilters = () => {
+    setFilters({ ...EMPTY_FILTERS })
+    onClearFilters?.()
+  }
+
+  if (loading || carregando) {
+    return (
+      <div className={styles.loading} role="status" aria-live="polite">
+        <span className={styles.loadingDot} />
+        Carregando dados do gráfico...
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className={styles.error} role="alert">
+        <span>{error}</span>
+        <button type="button" onClick={() => setRequestVersion((version) => version + 1)}>
+          Tentar novamente
+        </button>
+      </div>
+    )
+  }
 
   return (
-    <div className={styles.graficoContainer}>
-      <h2 className={styles.graficoTitle}>GRÁFICO DE TICKETS</h2>
-      {/* Exibição condicional de carregamento ou gráfico */}
-      {loading ? (
-        <div className={styles.loading}>Carregando dados...</div>
-      ) : (
-        <div className={styles.chartWrapper}>
-          <div className={styles.chartBars}>
-            {chartData.map((item, index) => (
-              <div key={index} className={styles.barGroup}>
-                <div 
-                  className={styles.bar} 
-                  style={{ 
-                    height: `${(item.value / maxValue) * 100}%`, // Altura da barra baseada no valor
-                    backgroundColor: item.color // Cor da barra
-                  }}
-                >
-                  <span className={styles.barValue}>{item.value}</span> {/* Valor numérico acima da barra */}
-                </div>
-                <div className={styles.barLabel}>{item.status}</div> {/* Rótulo da barra */}
-              </div>
-            ))}
-          </div>
-          <div className={styles.chartLegend}>
-            {chartData.map((item, index) => (
-              <div key={index} className={styles.legendItem}>
-                <span 
-                  className={styles.legendColor} 
-                  style={{ backgroundColor: item.color }} // Cor da legenda
-                />
-                <span>{item.status}</span> {/* Texto da legenda */}
-              </div>
-            ))}
-          </div>
+    <section className={styles.graficoContainer} aria-label="Gráfico de chamados por status">
+      <div className={styles.filters}>
+        <label className={styles.filterGroup}>
+          <span>Data inicial</span>
+          <input
+            type="date"
+            value={filters.startDate}
+            max={filters.endDate || undefined}
+            onChange={(event) => setFilters((current) => ({
+              ...current,
+              startDate: event.target.value
+            }))}
+          />
+        </label>
+
+        <label className={styles.filterGroup}>
+          <span>Data final</span>
+          <input
+            type="date"
+            value={filters.endDate}
+            min={filters.startDate || undefined}
+            onChange={(event) => setFilters((current) => ({
+              ...current,
+              endDate: event.target.value
+            }))}
+          />
+        </label>
+
+        <button
+          type="button"
+          className={styles.clearFilters}
+          onClick={handleClearFilters}
+          disabled={!filters.startDate && !filters.endDate}
+        >
+          Limpar filtros
+        </button>
+      </div>
+
+      <div className={styles.chartLegend} aria-hidden="true">
+        {chartData.map(({ key, label, color }) => (
+          <span key={key} className={styles.legendItem}>
+            <span className={styles.legendColor} style={{ backgroundColor: color }} />
+            {label}
+          </span>
+        ))}
+      </div>
+
+      <div className={styles.chart} role="img" aria-label={chartDescription}>
+        <div className={styles.yAxis} aria-hidden="true">
+          {ticks.map((tick) => (
+            <span key={tick}>{formatTick(tick)}</span>
+          ))}
         </div>
-      )}
-    </div>
-  // Formulário de filtros
-  
-  );
-};
 
-//-------------------------------------------------filtros--------------------------------------------------------------//
+        <div className={styles.plotArea}>
+          <div className={styles.gridLines} aria-hidden="true">
+            {ticks.map((tick) => <span key={tick} />)}
+          </div>
 
-// Container de filtros
-//       <div className={styles.filterContainer}>
-//         <form onSubmit={applyFilters} className={styles.filterForm}>
-//           <div className={styles.filterGroup}>
-//             <label htmlFor="startDate">Data Inicial</label>
-//             <input
-//               type="date"
-//               id="startDate"
-//               name="startDate"
-//               value={filters.startDate}
-//               onChange={handleFilterChange}
-//               max={filters.endDate || new Date().toISOString().split('T')[0]} // Impede data inicial maior que final
-//             />
-//           </div>
-//           <div className={styles.filterGroup}>
-//             <label htmlFor="endDate">Data Final</label>
-//             <input
-//               type="date"
-//               id="endDate"
-//               name="endDate"
-//               value={filters.endDate}
-//               onChange={handleFilterChange}
-//               min={filters.startDate} // Impede data final menor que inicial
-//               max={new Date().toISOString().split('T')[0]} // Impede data futura
-//             />
-//           </div>
-//           <div className={styles.filterActions}>
-//             <button type="submit" className={styles.applyButton}>Aplicar</button>
-//             <button type="button" onClick={resetFilters} className={styles.resetButton}>Limpar</button>
-//           </div>
-//         </form>
-//       </div>
+          <div className={styles.bars}>
+            {chartData.map(({ key, label, value, color }) => (
+              <div key={key} className={styles.barColumn}>
+                <div className={styles.barTrack}>
+                  {value > 0 && (
+                    <div
+                      className={styles.bar}
+                      style={{
+                        height: `${(value / axisMax) * 100}%`,
+                        backgroundColor: color
+                      }}
+                    >
+                      <span className={styles.barValue}>{formatTick(value)}</span>
+                    </div>
+                  )}
+                </div>
+                <span className={styles.barLabel}>{label}</span>
+              </div>
+            ))}
+          </div>
 
-//---------------------------------------------------------------------------------------------------------------//
+          {highestValue === 0 && (
+            <span className={styles.emptyMessage}>Nenhum chamado encontrado</span>
+          )}
+        </div>
+      </div>
+    </section>
+  )
+}
 
-export default Grafico;
+export default Grafico

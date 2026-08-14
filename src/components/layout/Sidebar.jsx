@@ -11,6 +11,9 @@ const Sidebar = ({ activeItem, onItemClick }) => {
 
     return (
         <aside className="sidebar">
+            <div className="sidebar-brand">
+                <img src="/imgs/logo.svg" alt="H-Call" className="sidebar-logo" />
+            </div>
             <div className="sidebar-menu">
                 {menuItems.map(item => (
                     <div
@@ -18,7 +21,7 @@ const Sidebar = ({ activeItem, onItemClick }) => {
                         className={`menu-item ${activeItem === item.id ? 'active' : ''}`}
                         onClick={() => onItemClick(item.id)}
                     >
-                        <i>{item.icon}</i>
+                        <span className="icon">{item.icon}</span>
                         <span>{item.label}</span>
                     </div>
                 ))}

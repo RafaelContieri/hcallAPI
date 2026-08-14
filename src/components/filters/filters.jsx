@@ -1,64 +1,60 @@
-import React, { useState } from 'react';
-import './Filters.css'
+import React from 'react'
+import './filters.css'
+
+const FILTER_ICONS = {
+    name: '/imgs/tickets/search.svg',
+    author: '/imgs/tickets/author-filter.svg',
+    date: '/imgs/tickets/calendar-filter.svg'
+}
 
 function Filters({ filtros, onFiltroChange }) {
     return (
-        <div className="filtros-section">
-            <div className="filtros-container">
-                <div className="filtro-item">
-                    <label>Chamado:</label>
-                    <input
-                        type="text"
-                        placeholder="Digite o nome do chamado"
-                        value={filtros.name}
-                        onChange={(e) => onFiltroChange('name', e.target.value)}
-                        className="filtro-input"
-                    />
-                </div>
-                <div className="filtro-item">
-                    <label>Email:</label>
-                    <input
-                        type="email"
-                        placeholder="Digite o email do autor"
-                        value={filtros.author}
-                        onChange={(e) => onFiltroChange('author', e.target.value)}
-                        className="filtro-input"
-                    />
-                </div>
-                <div className="container-filter01">
-                    <div className="filtro-item">
-                        <label>Data:</label>
-                        <input
-                            type="date"
-                            value={filtros.date}
-                            onChange={(e) => onFiltroChange('date', e.target.value)}
-                            className="filtro-input"
-                        />
-                    </div>
-                    <div className="filtro-item">
-                        <label>Status:</label>
-                        <select
-                            value={filtros.status}
-                            onChange={(e) => onFiltroChange('status', e.target.value)}
-                            className="filtro-input"
-                        >
-                            <option value="">Todos</option>
-                            <option value="pending">Pendente</option>
-                            <option value="doing">Em Andamento</option>
-                            <option value="conclued">Concluído</option>
-                        </select>
-                    </div>
-                </div>
-                <div className="filtros-buttons">
-                    <button
-                        className="filtro-clear-button"
-                        onClick={() => onFiltroChange('clear', true)}
-                    >
-                        Limpar Filtros
-                    </button>
-                </div>
-            </div>
-        </div>
+        <section className="tickets-filters" aria-label="Filtros de chamados">
+            <label className="ticket-filter-field">
+                <span className="sr-only">Nome do chamado</span>
+                <img src={FILTER_ICONS.name} alt="" aria-hidden="true" />
+                <input
+                    type="search"
+                    placeholder="Nome do chamado..."
+                    value={filtros.name}
+                    onChange={(event) => onFiltroChange('name', event.target.value)}
+                />
+            </label>
+
+            <label className="ticket-filter-field">
+                <span className="sr-only">Email do autor</span>
+                <img src={FILTER_ICONS.author} alt="" aria-hidden="true" />
+                <input
+                    type="email"
+                    placeholder="Email do autor..."
+                    value={filtros.author}
+                    onChange={(event) => onFiltroChange('author', event.target.value)}
+                />
+            </label>
+
+            <label className="ticket-filter-field ticket-filter-date">
+                <span className="sr-only">Data de criação</span>
+                <img src={FILTER_ICONS.date} alt="" aria-hidden="true" />
+                <input
+                    type="date"
+                    value={filtros.date}
+                    onChange={(event) => onFiltroChange('date', event.target.value)}
+                />
+            </label>
+
+            <label className="ticket-filter-field ticket-filter-select">
+                <span className="sr-only">Status do chamado</span>
+                <select
+                    value={filtros.status}
+                    onChange={(event) => onFiltroChange('status', event.target.value)}
+                >
+                    <option value="">Todos os status</option>
+                    <option value="pending">Pendente</option>
+                    <option value="doing">Em andamento</option>
+                    <option value="conclued">Resolvido</option>
+                </select>
+            </label>
+        </section>
     )
 }
 

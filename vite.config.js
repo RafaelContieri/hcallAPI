@@ -5,9 +5,8 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'https://belchir.com/api', // URL do seu backend
+        target: 'http://localhost:8089', // URL do seu backend local
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, '')
       }
     }
   }

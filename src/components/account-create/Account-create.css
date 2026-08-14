@@ -1,122 +1,344 @@
-.account-create-container {
-    padding: 20px;
-    max-width: 600px;
-    margin: 0 auto;
-}
-
-.account-create-container h1 {
-    font-size: 24px;
-    color: #333;
-    margin-bottom: 30px;
-}
-
-.account-create-form {
-    padding: 30px;
-    border-radius: 8px;
-    background-color: #fff;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    padding-right: 50px;
-}
-
-.form-group {
-    margin-bottom: 20px;
-}
-
-.group-input{
-    display: flex;
-}
-
-.form-group label {
-    display: flex;
-    margin-bottom: 8px;
-    color: #333;
-    font-weight: 500;
-    margin-left: 10px;
-}
-
-.form-group input,
-.form-group select {
+.create-user-page {
     width: 100%;
-    padding: 10px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    background-color: #f0f0f0;
-    color: #333;
+    padding: 24px 0;
 }
 
-.form-group input:focus,
-.form-group select:focus {
-    outline: none;
-    border-color: #2196f3;
-    box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.1);
-}
-
-.password-group {
-    display: flex;
-    gap: 10px;
+.create-user-back {
+    display: inline-flex;
     align-items: center;
-}
-
-.password-group input {
-    flex: 1;
-}
-
-.show-password-checkbox {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-left: 10px;
-}
-
-.form-actions {
-    display: flex;
-    gap: 10px;
-    margin-top: 30px;
-}
-
-.save-button,
-.delete-button {
-    padding: 12px 24px;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
+    gap: 6px;
+    min-height: 20px;
+    padding: 0;
+    color: #6b7a99;
+    font-size: 14px;
     font-weight: 500;
-    flex: 1;
-    transition: background-color 0.3s;
 }
 
-.save-button {
-    background-color: #2e7d32;
-    color: white;
+.create-user-back:hover {
+    color: #1e3a5f;
 }
 
-.save-button:hover {
-    background-color: #1b5e20;
+.create-user-back img {
+    width: 15px;
+    height: 15px;
 }
 
-.delete-button {
-    background-color: #e74c3c;
-    color: white;
+.create-user-card {
+    position: relative;
+    width: 100%;
+    min-height: 794px;
+    margin-top: 20px;
+    overflow: hidden;
+    border: 1px solid rgba(30, 58, 95, 0.1);
+    border-radius: 14px;
+    background: #ffffff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
 }
 
-.delete-button:hover {
-    background-color: #c0392b;
+.create-user-accent {
+    position: absolute;
+    inset: 0 0 auto;
+    height: 6px;
+    background: #1e3a5f;
 }
 
-@media (max-width: 768px) {
-    .account-create-container {
-        padding: 10px;
+.create-user-form {
+    display: flex;
+    width: 100%;
+    flex-direction: column;
+    padding: 30px 24px 24px;
+}
+
+.create-user-avatar-block {
+    display: flex;
+    align-items: center;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.create-user-avatar {
+    display: grid;
+    width: 40px;
+    height: 40px;
+    overflow: hidden;
+    place-items: center;
+    padding: 0;
+    border-radius: 50%;
+    background: #1e3a5f;
+}
+
+.create-user-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.create-user-avatar > img[aria-hidden="true"] {
+    width: 20px;
+    height: 20px;
+}
+
+.create-user-edit-photo {
+    height: 20px;
+    padding: 3px 10px;
+    border-radius: 5px;
+    background: #ffb900;
+    color: #000000;
+    font-size: 8px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    line-height: 12px;
+    text-transform: uppercase;
+}
+
+.create-user-file-input {
+    display: none;
+}
+
+.create-user-header {
+    margin-top: 4px;
+}
+
+.create-user-header h1 {
+    margin: 0;
+    color: #1a2233;
+    font-family: 'Inter', sans-serif;
+    font-size: 18px;
+    font-weight: 600;
+    line-height: 28px;
+}
+
+.create-user-header p {
+    margin: 0;
+    color: #6b7a99;
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.create-user-divider {
+    width: 100%;
+    height: 1px;
+    margin-top: 20px;
+    background: rgba(30, 58, 95, 0.1);
+}
+
+.create-user-fields {
+    display: flex;
+    width: min(100%, 462px);
+    flex-direction: column;
+    gap: 16px;
+    padding-top: 20px;
+}
+
+.create-user-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.create-user-field > span:first-child,
+.create-user-role legend {
+    color: #1a2233;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 20px;
+}
+
+.create-user-field strong {
+    color: #fb2c36;
+}
+
+.create-user-input-wrap {
+    position: relative;
+    display: flex;
+    width: 100%;
+    height: 42px;
+    align-items: center;
+}
+
+.create-user-input-wrap > img {
+    position: absolute;
+    left: 12px;
+    z-index: 1;
+    width: 14px;
+    height: 14px;
+    pointer-events: none;
+}
+
+.create-user-input-wrap input {
+    width: 100%;
+    height: 42px;
+    padding: 11px 15px 11px 37px;
+    border: 1px solid rgba(30, 58, 95, 0.1);
+    border-radius: 10px;
+    outline: none;
+    background: #f0f2f5;
+    color: #1a2233;
+    font-size: 14px;
+    transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
+}
+
+.create-user-input-wrap input::placeholder {
+    color: #6b7a99;
+}
+
+.create-user-input-wrap input:focus {
+    border-color: #1e88c9;
+    background: #ffffff;
+    box-shadow: 0 0 0 3px rgba(30, 136, 201, 0.13);
+}
+
+.create-user-password-wrap input {
+    padding-right: 42px;
+}
+
+.create-user-password-wrap button {
+    position: absolute;
+    right: 12px;
+    z-index: 1;
+    display: grid;
+    width: 18px;
+    height: 30px;
+    place-items: center;
+    padding: 0;
+}
+
+.create-user-password-wrap button img {
+    width: 14px;
+    height: 14px;
+}
+
+.create-user-role {
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: none;
+}
+
+.create-user-role legend {
+    margin-bottom: 8px;
+}
+
+.create-user-role label {
+    display: flex;
+    width: min(100%, 227px);
+    height: 48px;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    border: 2px solid #1e3a5f;
+    border-radius: 10px;
+    background: rgba(30, 58, 95, 0.05);
+    color: #1e3a5f;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.create-user-role input {
+    position: absolute;
+    opacity: 0;
+}
+
+.create-user-radio {
+    display: grid;
+    width: 16px;
+    height: 16px;
+    place-items: center;
+    border: 2px solid #1e3a5f;
+    border-radius: 50%;
+}
+
+.create-user-radio::after {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #1e3a5f;
+    content: '';
+}
+
+.create-user-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 225px));
+    gap: 12px;
+    padding-top: 20px;
+}
+
+.create-user-actions button {
+    display: inline-flex;
+    min-height: 40px;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 16px;
+    border-radius: 10px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+    color: #ffffff;
+    font-size: 14px;
+    font-weight: 500;
+    transition: filter 160ms ease, opacity 160ms ease, transform 160ms ease;
+}
+
+.create-user-actions button:hover:not(:disabled) {
+    filter: brightness(0.94);
+    transform: translateY(-1px);
+}
+
+.create-user-actions button:disabled {
+    cursor: wait;
+    opacity: 0.65;
+}
+
+.create-user-actions img {
+    width: 15px;
+    height: 15px;
+}
+
+.create-user-submit {
+    background: #009966;
+}
+
+.create-user-cancel {
+    background: #fb2c36;
+}
+
+.create-user-message {
+    width: min(100%, 462px);
+    margin-top: 16px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+}
+
+.create-user-message-error {
+    border: 1px solid #fecaca;
+    background: #fef2f2;
+    color: #b42318;
+}
+
+.create-user-message-success {
+    border: 1px solid #a4f4cf;
+    background: #d0fae5;
+    color: #007a55;
+}
+
+@media (max-width: 600px) {
+    .create-user-card {
+        min-height: 0;
     }
 
-    .account-create-form {
-        padding: 20px;
+    .create-user-form {
+        padding: 26px 16px 20px;
     }
 
-    .password-group {
-        flex-direction: column;
+    .create-user-actions {
+        grid-template-columns: 1fr;
     }
+}
 
-    .form-actions {
-        flex-direction: column;
+@media (prefers-reduced-motion: reduce) {
+    .create-user-input-wrap input,
+    .create-user-actions button {
+        transition: none;
     }
 }

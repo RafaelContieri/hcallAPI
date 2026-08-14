@@ -1,271 +1,308 @@
-import React, { useState, useRef } from "react";
-import './Account-create.css';
-import { createUser } from '../../api/createUser';
+import React, { useEffect, useRef, useState } from 'react'
+import './Account-create.css'
+import { createUser } from '../../api/createUser'
 
-const USER_ROLES = {
-    user: 'Usuário Comum',
-    admin: 'Administrador'
-};
+const FORM_ICONS = {
+    back: '/imgs/user-create/back.svg',
+    avatar: '/imgs/user-create/avatar.svg',
+    name: '/imgs/user-create/name.svg',
+    email: '/imgs/user-create/email.svg',
+    phone: '/imgs/user-create/phone.svg',
+    lock: '/imgs/user-create/lock.svg',
+    eye: '/imgs/user-create/eye.svg',
+    create: '/imgs/user-create/create.svg',
+    cancel: '/imgs/user-create/cancel.svg'
+}
 
-const AccountCreate = () => {
-    const [formData, setFormData] = useState({
-        name: '',
-        email: '',
-        phone: '',
-        password: '',
-        role: 'admin' // O valor default é "user"
-    });
+const EMPTY_FORM = {
+    name: '',
+    email: '',
+    phone: '',
+    password: '',
+    role: 'admin'
+}
 
-    const [apiError, setApiError] = useState(null);
-    const [isLoading, setIsLoading] = useState(false);
-    const [successMessage, setSuccessMessage] = useState(null);
-    const passwordInputRef = useRef(null);
-    const showPasswordRef = useRef(null);
+const formatPhone = (value) => {
+    const digits = value.replace(/\D/g, '').slice(0, 11)
 
-    const handleShowPassword = () => {
-        if (passwordInputRef.current && showPasswordRef.current) {
-            passwordInputRef.current.type = showPasswordRef.current.checked ? 'text' : 'password';
-        }
-    };
+    if (digits.length <= 2) return digits ? `(${digits}` : ''
+    if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`
+    if (digits.length <= 10) {
+        return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`
+    }
 
-    const formatPhone = (phone) => {
-        const digits = phone.replace(/\D/g, '');
-        return digits.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
-    };
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`
+}
 
-    const handleInputChange = (e) => {
-        const { name, value } = e.target;
-        setFormData(prev => ({
-            ...prev,
+const AccountCreate = ({ onCancel, onCreated }) => {
+    const [formData, setFormData] = useState(EMPTY_FORM)
+    const [apiError, setApiError] = useState('')
+    const [successMessage, setSuccessMessage] = useState('')
+    const [isLoading, setIsLoading] = useState(false)
+    const [showPassword, setShowPassword] = useState(false)
+    const [avatarPreview, setAvatarPreview] = useState('')
+    const fileInputRef = useRef(null)
+
+    useEffect(() => () => {
+        if (avatarPreview.startsWith('blob:')) URL.revokeObjectURL(avatarPreview)
+    }, [avatarPreview])
+
+    const handleInputChange = (event) => {
+        const { name, value } = event.target
+
+        setFormData((current) => ({
+            ...current,
             [name]: name === 'phone' ? formatPhone(value) : value
-        }));
-        // Log específico para mudança de role
-        if (name === 'role') {
-            console.log(`Input alterado (radio button):`);
-            console.log(`→ NAME: ${name}`);
-            console.log(`→ Novo valor selecionado: ${value}`);
-        }
-    };
+        }))
+        setApiError('')
+        setSuccessMessage('')
+    }
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
+    const handleAvatarChange = (event) => {
+        const file = event.target.files?.[0]
+        if (!file) return
 
-        // Validação
-        if (!formData.name.trim() || !formData.email.trim() || !formData.password.trim()) {
-            setApiError('Preencha todos os campos obrigatórios');
-            return;
+        if (!file.type.startsWith('image/')) {
+            setApiError('Selecione um arquivo de imagem válido.')
+            event.target.value = ''
+            return
         }
 
-        if (formData.password.length < 6) {
-            setApiError('A senha deve ter pelo menos 6 caracteres');
-            return;
+        if (file.size > 5 * 1024 * 1024) {
+            setApiError('A foto deve possuir no máximo 5 MB.')
+            event.target.value = ''
+            return
         }
 
-        setApiError(null);
-        setIsLoading(true);
+        if (avatarPreview.startsWith('blob:')) URL.revokeObjectURL(avatarPreview)
+        setAvatarPreview(URL.createObjectURL(file))
+        setApiError('')
+    }
+
+    const validateForm = () => {
+        if (!formData.name.trim() || !formData.email.trim() || !formData.password) {
+            return 'Preencha todos os campos obrigatórios.'
+        }
+
+        if (formData.name.trim().length < 3) return 'Informe o nome completo do usuário.'
+        if (formData.password.length < 6) return 'A senha deve possuir pelo menos 6 caracteres.'
+
+        return ''
+    }
+
+    const handleSubmit = async (event) => {
+        event.preventDefault()
+        const validationError = validateForm()
+
+        if (validationError) {
+            setApiError(validationError)
+            return
+        }
+
+        setApiError('')
+        setSuccessMessage('')
+        setIsLoading(true)
+
+        const payload = {
+            name: formData.name.trim(),
+            email: formData.email.trim().toLowerCase(),
+            phone: formData.phone.replace(/\D/g, ''),
+            password: formData.password,
+            role: formData.role
+        }
 
         try {
-            const payload = {
-                name: formData.name.trim(),
-                email: formData.email.trim().toLowerCase(),
-                password: formData.password,
-                phone: formData.phone.replace(/\D/g, ''),
-                role: formData.role
-            };
-            const result = await createUser(payload);
+            const result = await createUser(payload)
 
-            if (result.success) {
-                setFormData({
-                    name: '',
-                    email: '',
-                    phone: '',
-                    password: '',
-                    role: 'admin' // Reseta para o valor padrão
-                });
-                setSuccessMessage('Usuário criado com sucesso!');
-                setTimeout(() => setSuccessMessage(null), 5000);
+            if (!result.success) {
+                throw new Error(result.error || 'Não foi possível criar o usuário.')
             }
+
+            setFormData({ ...EMPTY_FORM })
+            setAvatarPreview('')
+            setSuccessMessage('Usuário criado com sucesso!')
+            onCreated?.(result.data)
         } catch (error) {
-            let errorMessage = error.message;
-
-            if (errorMessage.includes('Failed to fetch')) {
-                errorMessage = (
-                    <>
-                        Erro de conexão. Verifique:
-                        <ol className="error-list">
-                            <li>Sua conexão com a internet</li>
-                            <li>Se o proxy CORS está ativado</li>
-                        </ol>
-                    </>
-                );
-            }
-
-            setApiError(errorMessage);
+            setApiError(error.message || 'Não foi possível criar o usuário.')
         } finally {
-            setIsLoading(false);
+            setIsLoading(false)
         }
-    };
+    }
 
     const handleCancel = () => {
-        setFormData({
-            name: '',
-            email: '',
-            phone: '',
-            password: '',
-            role: 'admin'
-        });
-        setApiError(null);
-    };
+        if (isLoading) return
+        setFormData({ ...EMPTY_FORM })
+        setApiError('')
+        setSuccessMessage('')
+        setAvatarPreview('')
+        onCancel?.()
+    }
 
     return (
-        <div className="account-create-container">
-            <div className="account-create-form">
-                <h1>Criar Novo Usuário</h1>
+        <section className="create-user-page">
+            <button type="button" className="create-user-back" onClick={handleCancel}>
+                <img src={FORM_ICONS.back} alt="" aria-hidden="true" />
+                Voltar para lista
+            </button>
 
-                {apiError && (
-                    <div className="error-message">
-                        {apiError}
-                        {typeof apiError === 'string' && apiError.includes('proxy') && (
-                            <button
-                                className="proxy-button"
-                                onClick={() => window.open('https://cors-anywhere.herokuapp.com/corsdemo', '_blank')}
-                            >
-                                Ativar Proxy Agora
-                            </button>
-                        )}
-                    </div>
-                )}
+            <article className="create-user-card">
+                <span className="create-user-accent" aria-hidden="true" />
 
-                {successMessage && <div className="success-message">{successMessage}</div>}
-
-                <form onSubmit={handleSubmit} className="account-form">
-                    {/* Campo Nome */}
-                    <div className="form-group">
-                        <label htmlFor="name">Nome completo *</label>
+                <form className="create-user-form" onSubmit={handleSubmit} noValidate>
+                    <div className="create-user-avatar-block">
+                        <button
+                            type="button"
+                            className="create-user-avatar"
+                            onClick={() => fileInputRef.current?.click()}
+                            aria-label="Selecionar foto do usuário"
+                        >
+                            {avatarPreview ? (
+                                <img src={avatarPreview} alt="Pré-visualização do usuário" />
+                            ) : (
+                                <img src={FORM_ICONS.avatar} alt="" aria-hidden="true" />
+                            )}
+                        </button>
+                        <button
+                            type="button"
+                            className="create-user-edit-photo"
+                            onClick={() => fileInputRef.current?.click()}
+                        >
+                            Editar foto
+                        </button>
                         <input
-                            id="name"
-                            type="text"
-                            name="name"
-                            value={formData.name}
-                            onChange={handleInputChange}
-                            required
-                            placeholder="Digite o nome completo"
-                            autoComplete="name"
+                            ref={fileInputRef}
+                            className="create-user-file-input"
+                            type="file"
+                            accept="image/*"
+                            onChange={handleAvatarChange}
                         />
                     </div>
 
-                    {/* Campo Email */}
-                    <div className="form-group">
-                        <label htmlFor="email">Email *</label>
-                        <input
-                            id="email"
-                            type="email"
-                            name="email"
-                            value={formData.email}
-                            onChange={handleInputChange}
-                            required
-                            placeholder="exemplo@email.com"
-                            autoComplete="email"
-                        />
-                    </div>
+                    <header className="create-user-header">
+                        <h1>Criar Novo Usuário</h1>
+                        <p>Preencha os dados para cadastrar</p>
+                    </header>
 
-                    {/* Campo Telefone */}
-                    <div className="form-group">
-                        <label htmlFor="phone">Telefone</label>
-                        <input
-                            id="phone"
-                            type="tel"
-                            name="phone"
-                            value={formData.phone}
-                            onChange={handleInputChange}
-                            maxLength="15"
-                            placeholder="(00) 00000-0000"
-                            autoComplete="tel"
-                        />
-                    </div>
+                    <div className="create-user-divider" />
 
-                    {/* Campo Senha */}
-                    <div className="form-group">
-                        <label htmlFor="password-input">Senha *</label>
-                        <div className="password-group">
-                            <input
-                                id="password-input"
-                                type="password"
-                                name="password"
-                                value={formData.password}
-                                onChange={handleInputChange}
-                                required
-                                minLength="6"
-                                placeholder="Mínimo 6 caracteres"
-                                autoComplete="new-password"
-                                ref={passwordInputRef}
-                            />
-                            <div className="show-password-checkbox">
-                                <input
-                                    type="checkbox"
-                                    id="show-password"
-                                    onChange={handleShowPassword}
-                                    ref={showPasswordRef}
-                                />
-                                <label htmlFor="show-password">Mostrar senha</label>
-                            </div>
+                    {(apiError || successMessage) && (
+                        <div
+                            className={`create-user-message ${apiError ? 'create-user-message-error' : 'create-user-message-success'}`}
+                            role={apiError ? 'alert' : 'status'}
+                        >
+                            {apiError || successMessage}
                         </div>
-                    </div>
-                    <div className="form-group">
-                        <label htmlFor="role">Tipo de Usuário</label>
-                        <div className="group-input">
-                            <label htmlFor="admin">
+                    )}
+
+                    <div className="create-user-fields">
+                        <label className="create-user-field" htmlFor="create-user-name">
+                            <span>Nome completo <strong>*</strong></span>
+                            <span className="create-user-input-wrap">
+                                <img src={FORM_ICONS.name} alt="" aria-hidden="true" />
+                                <input
+                                    id="create-user-name"
+                                    type="text"
+                                    name="name"
+                                    value={formData.name}
+                                    onChange={handleInputChange}
+                                    placeholder="Digite o nome completo"
+                                    autoComplete="name"
+                                    required
+                                />
+                            </span>
+                        </label>
+
+                        <label className="create-user-field" htmlFor="create-user-email">
+                            <span>Email <strong>*</strong></span>
+                            <span className="create-user-input-wrap">
+                                <img src={FORM_ICONS.email} alt="" aria-hidden="true" />
+                                <input
+                                    id="create-user-email"
+                                    type="email"
+                                    name="email"
+                                    value={formData.email}
+                                    onChange={handleInputChange}
+                                    placeholder="exemplo@email.com"
+                                    autoComplete="email"
+                                    required
+                                />
+                            </span>
+                        </label>
+
+                        <label className="create-user-field" htmlFor="create-user-phone">
+                            <span>Telefone</span>
+                            <span className="create-user-input-wrap">
+                                <img src={FORM_ICONS.phone} alt="" aria-hidden="true" />
+                                <input
+                                    id="create-user-phone"
+                                    type="tel"
+                                    name="phone"
+                                    value={formData.phone}
+                                    onChange={handleInputChange}
+                                    placeholder="(00) 00000-0000"
+                                    autoComplete="tel"
+                                    inputMode="numeric"
+                                />
+                            </span>
+                        </label>
+
+                        <label className="create-user-field" htmlFor="create-user-password">
+                            <span>Senha <strong>*</strong></span>
+                            <span className="create-user-input-wrap create-user-password-wrap">
+                                <img src={FORM_ICONS.lock} alt="" aria-hidden="true" />
+                                <input
+                                    id="create-user-password"
+                                    type={showPassword ? 'text' : 'password'}
+                                    name="password"
+                                    value={formData.password}
+                                    onChange={handleInputChange}
+                                    placeholder="Mínimo 6 caracteres"
+                                    autoComplete="new-password"
+                                    minLength={6}
+                                    required
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPassword((visible) => !visible)}
+                                    aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                                >
+                                    <img src={FORM_ICONS.eye} alt="" aria-hidden="true" />
+                                </button>
+                            </span>
+                        </label>
+
+                        <fieldset className="create-user-role">
+                            <legend>Tipo de Usuário</legend>
+                            <label>
                                 <input
                                     type="radio"
                                     name="role"
-                                    id="admin"
                                     value="admin"
                                     checked={formData.role === 'admin'}
                                     onChange={handleInputChange}
                                 />
+                                <span className="create-user-radio" />
                                 Administrador
                             </label>
-                            <label htmlFor="user" style={{ marginLeft: '10px' }}>
-                                <input
-                                    type="radio"
-                                    name="role"
-                                    id="user"
-                                    value="user"
-                                    checked={formData.role === 'user'}
-                                    onChange={handleInputChange}
-                                />
-                                Usuário
-                            </label>
-                        </div>
+                        </fieldset>
                     </div>
 
-                    {/* Botões de Ação */}
-                    <div className="form-actions">
-                        <button
-                            type="submit"
-                            className="save-button"
-                            disabled={isLoading}
-                        >
-                            {isLoading ? (
-                                <>
-                                    <span className="spinner"></span>
-                                    Criando...
-                                </>
-                            ) : 'Criar Usuário'}
+                    <div className="create-user-divider" />
+
+                    <div className="create-user-actions">
+                        <button type="submit" className="create-user-submit" disabled={isLoading}>
+                            <img src={FORM_ICONS.create} alt="" aria-hidden="true" />
+                            {isLoading ? 'Criando...' : 'Criar Usuário'}
                         </button>
-                        <button
-                            type="button"
-                            className="delete-button"
-                            onClick={handleCancel}
-                            disabled={isLoading}
-                        >
+                        <button type="button" className="create-user-cancel" onClick={handleCancel} disabled={isLoading}>
+                            <img src={FORM_ICONS.cancel} alt="" aria-hidden="true" />
                             Cancelar
                         </button>
                     </div>
                 </form>
-            </div>
-        </div>
-    );
-};
+            </article>
+        </section>
+    )
+}
 
-export default AccountCreate;
+export default AccountCreate

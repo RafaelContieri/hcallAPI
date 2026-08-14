@@ -1,115 +1,120 @@
-// Importação dos hooks e bibliotecas necessárias
-import React, { useState } from "react"; // React e hook de estado
-import { FaUser, FaLock } from "react-icons/fa"; // Ícones de usuário e cadeado
-import { useNavigate } from "react-router-dom"; // Hook para navegação entre rotas
-import "./login.css"; // Estilos CSS específicos do login
-import { api_login } from "../../api/auth"; // Importação correta da função de login
-import axios from "axios";
+import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { api_login } from "../../api/auth";
+import "./Login.css";
 
-// Componente funcional de formulário de login
+const heroImage = "https://www.figma.com/api/mcp/asset/a5d6dea4-5c4e-459b-84c6-9de87b78097e.svg";
+const emailIcon = "https://www.figma.com/api/mcp/asset/1d75c006-6554-4759-b3d1-93fe05314c37.svg";
+const passwordIcon = "https://www.figma.com/api/mcp/asset/d5a5d6f5-d77b-4c71-81f1-15aa408eda26.svg";
+const showIcon = "https://www.figma.com/api/mcp/asset/1ddf9394-52c3-4605-b80d-49c68909be28.svg";
+
 const LoginForm = () => {
-    const navigate = useNavigate(); // Hook para redirecionar o usuário
+    const navigate = useNavigate();
     const [formData, setFormData] = useState({
-        email: "",        // Campo de e-mail
-        password: "",     // Campo de senha
-        remember: false   // Checkbox para lembrar login
+        email: "",
+        password: ""
     });
+    const [showPassword, setShowPassword] = useState(false);
+    const [error, setError] = useState("");
+    const [loading, setLoading] = useState(false);
 
-    const [error, setError] = useState("");     // Mensagem de erro
-    const [loading, setLoading] = useState(false); // Estado de carregamento (usado ao enviar o formulário)
-
-    // Função para lidar com mudanças nos inputs do formulário
     const handleChange = (e) => {
-        const { name, value, type, checked } = e.target;
-        setFormData(prev => ({
+        const { name, value } = e.target;
+        setFormData((prev) => ({
             ...prev,
-            [name]: type === 'checkbox' ? checked : value // Atualiza o estado dependendo do tipo do campo
+            [name]: value
         }));
     };
 
-    // Função para envio do formulário
+    const togglePasswordVisibility = () => {
+        setShowPassword((prev) => !prev);
+    };
+
     const handleSubmit = async (e) => {
-        e.preventDefault(); // Impede o comportamento padrão do formulário (recarregar a página)
-        setError("");       // Limpa qualquer erro anterior
-        setLoading(true);   // Ativa o estado de carregamento
+        e.preventDefault();
+        setError("");
+        setLoading(true);
 
         try {
-            // Chamada real à API para autenticação
             const result = await api_login(formData.email, formData.password);
-
             if (result.success) {
-                navigate('/dashboard'); // Redireciona para o dashboard se login for bem-sucedido
+                navigate("/dashboard");
             } else {
-                setError(result.error || 'Erro ao fazer login'); // Mostra erro retornado pela API
+                setError(result.error || "Erro ao fazer login");
             }
         } catch (err) {
-            setError('Erro ao conectar com o servidor'); // Mensagem genérica de erro
+            setError("Erro ao conectar com o servidor");
         } finally {
-            setLoading(false); // Desativa o estado de carregamento
+            setLoading(false);
         }
     };
 
-    // JSX retornado pelo componente
     return (
         <div className="container">
             <div className="login-container">
-                {/* Lado esquerdo com logo e saudação */}
                 <div className="left-side">
-                    <img src="/imgs/cps-logo.png" alt="CPS Logo" className="logo" />
-                    <h1 className="title-up">Bem-vindo de volta!</h1>
-                    <p className="subtitle-up">Sistema de Gerenciamento de Chamados</p>
+                    <div className="hero-card">
+                        <img src={heroImage} alt="H-Call Logo" className="hero-logo" />
+                        <p className="hero-subtitle">Controle de chamados, na palma da sua mão !</p>
+                    </div>
                 </div>
-
-                {/* Lado direito com o formulário de login */}
                 <div className="right-side">
-                    <h1 className="title">Acesso restrito!</h1>
-                    <p className="subtitle">Entre com suas credenciais para continuar.</p>
-
-                    {/* Exibe mensagem de erro se houver */}
-                    {error && <p className="error-message">{error}</p>}
-
-                    {/* Formulário de login */}
-                    <form onSubmit={handleSubmit}>
-                        {/* Campo de email */}
-                        <div className="input-group">
-                            <div className="icon"><FaUser /></div>
-                            <input
-                                type="email"
-                                name="email"
-                                placeholder="Email"
-                                value={formData.email}
-                                onChange={handleChange}
-                                required
-                                disabled={loading} // Desabilita o campo durante carregamento
-                            />
+                    <div className="form-panel">
+                        <div className="form-header">
+                            <h2>Realize seu login</h2>
                         </div>
 
-                        {/* Campo de senha */}
-                        <div className="input-group">
-                            <div className="icon"><FaLock /></div>
-                            <input
-                                type="password"
-                                name="password"
-                                placeholder="Senha"
-                                value={formData.password}
-                                onChange={handleChange}
-                                required
-                                disabled={loading}
-                            />
-                        </div>
-                        {/* Botão de envio */}
-                        <button
-                            type="submit"
-                            className="login-button"
-                            disabled={loading}
-                        >
-                            {loading ? 'Entrando...' : 'Entrar'} {/* Texto muda conforme estado de carregamento */}
-                        </button>
-                    </form>
+                        {error && <p className="error-message">{error}</p>}
+
+                        <form onSubmit={handleSubmit} className="login-form">
+                            <div className="input-group">
+                                <img src={emailIcon} alt="Email icon" className="input-icon" />
+                                <input
+                                    type="email"
+                                    name="email"
+                                    placeholder="E-mail"
+                                    value={formData.email}
+                                    onChange={handleChange}
+                                    required
+                                    disabled={loading}
+                                />
+                            </div>
+
+                            <div className="input-group">
+                                <img src={passwordIcon} alt="Password icon" className="input-icon" />
+                                <input
+                                    type={showPassword ? "text" : "password"}
+                                    name="password"
+                                    placeholder="Senha"
+                                    value={formData.password}
+                                    onChange={handleChange}
+                                    required
+                                    disabled={loading}
+                                />
+                                <button
+                                    type="button"
+                                    className="password-toggle"
+                                    onClick={togglePasswordVisibility}
+                                    tabIndex={-1}
+                                    disabled={loading}
+                                >
+                                    <img src={showIcon} alt="Mostrar senha" />
+                                </button>
+                            </div>
+
+                            <div className="forgot-row">
+                                <button type="button" className="forgot-link">Esqueci minha senha</button>
+                            </div>
+
+                            <button type="submit" className="login-button" disabled={loading}>
+                                {loading ? "Entrando..." : "Entrar"}
+                            </button>
+                        </form>
+                    </div>
                 </div>
             </div>
         </div>
     );
 };
 
-export default LoginForm; // Exporta o componente
+export default LoginForm;

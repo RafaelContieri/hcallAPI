@@ -1,397 +1,416 @@
-import React, { useState, useEffect } from 'react';
-import './ViewTickets.css';
-import { getTicketDetails, addAnotacao, handleConcluirTicket } from '../../api/tickets';
-import { handleIniciarTicket } from '../../api/tickets';
-import { fetchTicketData } from '../../api/tickets';
+import React, { useEffect, useMemo, useState } from 'react'
+import './ViewTickets.css'
+import {
+    getTicketDetails,
+    handleConcluirTicket,
+    handleIniciarTicket
+} from '../../api/tickets'
 
-const ViewTickets = ({ ticketId, onClose }) => {
-    const [ticket, setTicket] = useState(null);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState(null);
-    const [updates, setUpdates] = useState([]);
-    const [noteText, setNoteText] = useState('');
-    const [images, setImages] = useState([]);
+const DETAIL_ICONS = {
+    download: '/imgs/ticket-details/download.svg',
+    action: '/imgs/ticket-details/start.svg'
+}
 
-    useEffect(() => {
-        const fetchTicketData = async () => {
-            setIsLoading(true);
-            setError(null);
+const STATUS_CONFIG = {
+    pending: { label: 'Pendente', className: 'pending' },
+    doing: { label: 'Andamento', className: 'doing' },
+    conclued: { label: 'Resolvido', className: 'resolved' },
+    completed: { label: 'Resolvido', className: 'resolved' },
+    concluded: { label: 'Resolvido', className: 'resolved' },
+    done: { label: 'Resolvido', className: 'resolved' }
+}
 
-            try {
-                const ticketData = await getTicketDetails(ticketId.id);
-                console.log("Dados completos do ticket:", ticketData.data.ticket);
-                setTicket(ticketData.data.ticket);
+const MIME_TYPES = {
+    bmp: 'image/bmp',
+    gif: 'image/gif',
+    jpeg: 'image/jpeg',
+    jpg: 'image/jpeg',
+    pdf: 'application/pdf',
+    png: 'image/png',
+    svg: 'image/svg+xml',
+    webp: 'image/webp'
+}
 
-                if (ticketData.data.ticket.history) {
-                    setUpdates(ticketData.data.ticket.history.map(item => ({
-                        date: item.date,
-                        text: item.return  // Note que o campo é 'return' no JSON
-                    })));
-                }
-            } catch (err) {
-                console.error('Erro ao buscar detalhes do ticket:', err);
-                setError('Falha ao carregar os detalhes do ticket');
-            } finally {
-                setIsLoading(false);
-            }
-        };
+const getTicketId = (ticket) => (
+    ticket?.id ?? ticket?._id ?? ticket?.ticketId ?? ticket?.ticket_id ?? ticket
+)
 
-        if (ticketId) {
-            fetchTicketData();
+const normalizeStatus = (ticket) => String(
+    ticket?.tickt_status ?? ticket?.status ?? ticket?.situacao ?? ''
+).normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, '_')
+
+const getNormalizedStatus = (ticket) => {
+    const status = normalizeStatus(ticket)
+
+    if (['pending', 'pendente', 'open', 'aberto'].includes(status)) return 'pending'
+    if (['doing', 'in_progress', 'em_andamento', 'andamento'].includes(status)) return 'doing'
+    if (['conclued', 'concluded', 'completed', 'done', 'concluido', 'resolvido'].includes(status)) return 'conclued'
+
+    return status
+}
+
+const getStatusConfig = (ticket) => {
+    const status = getNormalizedStatus(ticket)
+
+    return STATUS_CONFIG[status] ?? {
+        label: status || 'Aguardando',
+        className: 'neutral'
+    }
+}
+
+const extractTicket = (response) => (
+    response?.data?.data?.ticket ??
+    response?.data?.ticket ??
+    response?.ticket ??
+    response?.data?.data ??
+    response?.data ??
+    response
+)
+
+const parseJson = (value) => {
+    if (typeof value !== 'string') return null
+
+    try {
+        return JSON.parse(value)
+    } catch {
+        return null
+    }
+}
+
+const getMimeTypeFromName = (name = '') => {
+    const extension = name.split('.').pop()?.toLowerCase()
+    return MIME_TYPES[extension] ?? 'application/octet-stream'
+}
+
+const normalizeAttachment = (rawAttachment, index) => {
+    const source = typeof rawAttachment === 'object' && rawAttachment !== null
+        ? rawAttachment
+        : { base64: rawAttachment }
+    const parsedBase64 = typeof source.base64 === 'object' && source.base64 !== null
+        ? source.base64
+        : parseJson(source.base64)
+    const payload = parsedBase64 && typeof parsedBase64 === 'object' ? parsedBase64 : {}
+    const name = (
+        source.name ?? source.fileName ?? source.filename ??
+        payload.name ?? payload.fileName ?? payload.filename ??
+        `anexo-${index + 1}`
+    )
+    const declaredType = (
+        source.type ?? source.mimeType ?? source.mime ??
+        payload.type ?? payload.mimeType ?? payload.mime
+    )
+    const content = (
+        payload.content ?? payload.data ??
+        source.content ?? source.data ??
+        (parsedBase64 ? null : source.base64)
+    )
+    const remoteUrl = (
+        source.url ?? source.src ?? source.href ?? source.downloadUrl ??
+        payload.url ?? payload.src ?? payload.href ?? payload.downloadUrl
+    )
+    const type = declaredType || getMimeTypeFromName(name)
+
+    let url = remoteUrl || ''
+
+    if (!url && typeof content === 'string') {
+        if (/^(data:|https?:|blob:)/i.test(content)) {
+            url = content
         } else {
-            setIsLoading(false);
+            url = `data:${type};base64,${content.replace(/^data:[^;]+;base64,/i, '')}`
         }
-    }, [ticketId]);
+    }
 
-    const formatarData = (dataString) => {
-        const data = new Date(dataString);
-        return data.toLocaleDateString('pt-BR', {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-        });
-    };
+    if (!url) return null
 
-    const handleAddNote = async () => {
-        try {
-            const novaAnotacao = await addAnotacao(ticket.id, noteText);
+    const urlMimeType = url.match(/^data:([^;,]+)/i)?.[1]
+    const resolvedType = urlMimeType || type
 
-            // Atualiza o estado com a nova anotação
-            setUpdates(prev => [...prev, {
-                date: novaAnotacao.data,
-                text: novaAnotacao.texto
-            }]);
+    return {
+        id: source.id ?? source._id ?? `${name}-${index}`,
+        name,
+        type: resolvedType,
+        url,
+        isImage: resolvedType.startsWith('image/') || /\.(bmp|gif|jpe?g|png|svg|webp)$/i.test(name)
+    }
+}
 
-            setNoteText('')
+const extractAttachments = (response, ticket) => {
+    const containers = [ticket, response?.data?.data, response?.data, response]
+    const collectionKeys = ['images', 'attachments', 'anexos', 'files']
+    const rawAttachments = []
+    const seen = new Set()
 
-            // Limpa o campo de texto
-        } catch (err) {
-            console.error('Erro ao adicionar anotação:', err);
-            setError('Erro ao adicionar anotação');
-        }
-    };
+    containers.forEach((container) => {
+        if (!container || typeof container !== 'object') return
 
+        collectionKeys.forEach((key) => {
+            const collection = container[key]
+            const items = Array.isArray(collection)
+                ? collection
+                : collection != null
+                    ? [collection]
+                    : []
 
-    //-----------------------------------------------------------------------------------//
+            items.forEach((item) => {
+                if (seen.has(item)) return
+                seen.add(item)
+                rawAttachments.push(item)
+            })
+        })
+    })
 
-    const handleClickIniciar = async () => {
-        try {
-            if (!ticket || ticket.tickt_status !== 'pending') {
-                throw new Error('Só é possível iniciar tickets com status "pending"');
-            }
+    return rawAttachments
+        .map(normalizeAttachment)
+        .filter(Boolean)
+}
 
-            const updatedTicket = await handleIniciarTicket(ticket);
+const formatDate = (dateValue) => {
+    const date = new Date(dateValue)
 
-            if (updatedTicket) {
-                // Atualiza o estado local mantendo todos os dados existentes
-                setTicket({
-                    ...ticket,
-                    tickt_status: 'doing' // Atualiza apenas o status
-                });
-                alert('Ticket iniciado com sucesso!');
-            }
-        } catch (error) {
-            console.error('Erro ao iniciar ticket:', error);
-            alert(error.message || 'Erro ao iniciar ticket');
-        }
-    };
+    if (Number.isNaN(date.getTime())) return 'Não informado'
 
-    //-----------------------------------------------------------------------------------------------//
+    return new Intl.DateTimeFormat('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    }).format(date)
+}
 
-    //-------------------------------PEGA AS IMAGENS DO TICKET---------------------------------//
+const downloadAttachment = (attachment) => {
+    const link = document.createElement('a')
+    link.href = attachment.url
+    link.download = attachment.name
+    link.rel = 'noopener noreferrer'
+
+    if (/^https?:/i.test(attachment.url)) link.target = '_blank'
+
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+}
+
+const ViewTickets = ({ ticketId, onClose, onTicketUpdated }) => {
+    const [ticket, setTicket] = useState(null)
+    const [attachments, setAttachments] = useState([])
+    const [isLoading, setIsLoading] = useState(true)
+    const [error, setError] = useState(null)
+    const [actionError, setActionError] = useState('')
+    const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
+
     useEffect(() => {
-        if (!ticket?.id) return;
+        let active = true
+        const identifier = getTicketId(ticketId)
 
-        const fetchImages = async () => {
+        if (!identifier) {
+            setIsLoading(false)
+            setError('Nenhum ticket selecionado.')
+            return () => {
+                active = false
+            }
+        }
+
+        const loadTicket = async () => {
+            setIsLoading(true)
+            setError(null)
+
             try {
-                const { data } = await fetchTicketData(ticket.id);
-                const images = data?.ticket?.images ?? [];
-                setImages(images.length ? images : []);
-                console.log('Imagens recebidas:', images);
-            } catch (err) {
-                console.error('Erro ao buscar imagens do ticket:', err);
-                setError('Falha ao carregar as imagens do ticket');
+                const response = await getTicketDetails(identifier)
+                const ticketData = extractTicket(response)
+
+                if (!ticketData || typeof ticketData !== 'object') {
+                    throw new Error('O endpoint não retornou os dados do chamado.')
+                }
+
+                if (active) {
+                    setTicket(ticketData)
+                    setAttachments(extractAttachments(response, ticketData))
+                }
+            } catch (loadError) {
+                console.error('Erro ao buscar detalhes do ticket:', loadError)
+                if (active) setError(loadError.message || 'Falha ao carregar os detalhes do ticket.')
+            } finally {
+                if (active) setIsLoading(false)
             }
-        };
-
-        fetchImages();
-    }, [ticket]);
-
-
-    //---------------------------------------Download das imagens-----------------------------//
-    const baixarImagens = async () => {
-        try {
-            if (!images.length) throw new Error('Nenhuma imagem disponível para download.');
-
-            images.forEach((img, index) => {
-                if (!img.base64) return;
-
-                const parsed = parseBase64(img.base64, index);
-                if (!parsed) return;
-
-                const blob = criarBlob(parsed.content, parsed.type);
-                iniciarDownload(blob, parsed.name || `imagem_${index}`);
-            });
-
-        } catch (error) {
-            console.error('Erro ao baixar imagens:', error);
-            alert(error.message);
         }
-    };
 
-    // Função auxiliar para parsear a base64 com tratamento de erro
-    const parseBase64 = (base64String, index) => {
-        try {
-            return JSON.parse(base64String);
-        } catch {
-            console.error(`Erro ao fazer parse da imagem na posição ${index}`);
-            return null;
+        loadTicket()
+
+        return () => {
+            active = false
         }
-    };
+    }, [ticketId])
 
-    // Função auxiliar para criar um Blob a partir de uma string base64
-    const criarBlob = (base64Content, mimeType = 'image/jpeg') => {
-        const byteChars = atob(base64Content);
-        const byteArray = Uint8Array.from(byteChars, char => char.charCodeAt(0));
-        return new Blob([byteArray], { type: mimeType });
-    };
+    const informationFields = useMemo(() => ticket ? [
+        { label: 'ID Chamado', value: `#${getTicketId(ticket)}`, mono: true },
+        { label: 'Cliente', value: ticket.clientName || ticket.name || 'Não informado' },
+        { label: 'Equipamento', value: ticket.item || 'Não informado' },
+        { label: 'Referência do Equipamento', value: ticket.reference || 'Não informado' },
+        { label: 'Local', value: ticket.department || ticket.location || 'Não informado' },
+        { label: 'Tempo', value: formatDate(ticket.date ?? ticket.createdAt ?? ticket.created_at), mono: true },
+        { label: 'Autor', value: ticket.author || 'Não informado' }
+    ] : [], [ticket])
 
-    // Função auxiliar para criar e disparar o download
-    const iniciarDownload = (blob, fileName) => {
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
+    const updateTicketStatus = async (nextStatus) => {
+        setIsUpdatingStatus(true)
+        setActionError('')
 
-        link.href = url;
-        link.download = fileName;
-
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-
-        URL.revokeObjectURL(url);
-    };
-
-
-
-
-
-    //----------------------------------------------------------------------------------//
-
-    const handleClickConcluir = async () => {
         try {
-            if (!ticket || ticket.tickt_status !== 'doing') {
-                throw new Error('Só é possível concluir tickets com status "doing"');
+            const requestTicket = {
+                ...ticket,
+                id: getTicketId(ticket)
+            }
+            const updatedTicket = nextStatus === 'doing'
+                ? await handleIniciarTicket(requestTicket)
+                : await handleConcluirTicket(requestTicket)
+            const mergedTicket = {
+                ...ticket,
+                ...updatedTicket,
+                tickt_status: updatedTicket.tickt_status || updatedTicket.status || nextStatus,
+                status: updatedTicket.status || updatedTicket.tickt_status || nextStatus
             }
 
-            const updatedTicket = await handleConcluirTicket(ticket);
-
-            if (updatedTicket) {
-                // Atualiza o estado local mantendo todos os dados existentes
-                setTicket({
-                    ...ticket,
-                    tickt_status: 'completed' // Garantindo o status correto
-                });
-                alert('Ticket concluído com sucesso!');
-            }
-        } catch (error) {
-            console.error('Erro ao concluir ticket:', error);
-            alert(error.message || 'Erro ao concluir ticket');
+            setTicket(mergedTicket)
+            onTicketUpdated?.(mergedTicket)
+        } catch (statusError) {
+            console.error('Erro ao atualizar o status do ticket:', statusError)
+            setActionError(statusError.message || 'Não foi possível atualizar o chamado.')
+        } finally {
+            setIsUpdatingStatus(false)
         }
-    };
+    }
 
-
-    //----------------------------------------------------------------------------------//
-
-
-    if (!ticketId) {
-        return <div className="view-ticket-content">Nenhum ticket selecionado</div>;
+    const downloadAllAttachments = () => {
+        attachments.forEach((attachment, index) => {
+            window.setTimeout(() => downloadAttachment(attachment), index * 120)
+        })
     }
 
     if (isLoading) {
         return (
-            <div className="view-ticket-content loading">
-                <div className="loading-spinner"></div>
-                <p>Carregando detalhes do ticket...</p>
+            <div className="ticket-detail-feedback" role="status">
+                <span className="ticket-detail-spinner" />
+                Carregando detalhes do chamado...
             </div>
-        );
+        )
     }
 
-    if (error) {
+    if (error || !ticket) {
         return (
-            <div className="view-ticket-content error">
-                <p>{error}</p>
-                <button onClick={onClose} className="close-btn">
-                    Fechar
-                </button>
+            <div className="ticket-detail-feedback ticket-detail-error" role="alert">
+                <p>{error || 'Não foi possível carregar os dados do chamado.'}</p>
+                <button type="button" onClick={onClose}>Voltar</button>
             </div>
-        );
+        )
     }
 
-    if (!ticket) {
-        return (
-            <div className="view-ticket-content">
-                <p>Não foi possível carregar os dados do ticket</p>
-                <button onClick={onClose} className="close-btn">
-                    Fechar
-                </button>
-            </div>
-        );
-    }
-
-
+    const status = getStatusConfig(ticket)
+    const normalizedStatus = getNormalizedStatus(ticket)
 
     return (
-        <div className="view-ticket-content">
-            <div className="ticket-header">
-                <div className="textHeader">
-                    <h1>Descrição do Problema</h1>
-                </div>
-                <div className="descricaoChamado">
-                    <p className='description-text'>
-                        {ticket.explain}
-                    </p>
-                </div>
-            </div>
+        <article className={`ticket-detail-card ticket-detail-${status.className}`}>
+            <span className="ticket-detail-accent" aria-hidden="true" />
 
-            <div className="ticket-info-grid">
-                <div className="info-column">
-                    <div className="info-block">
-                        <div className="info-item">
-                            <span className="label">ID Chamado</span>
-                            <span className="value">#{ticket.id}</span>
-                        </div>
-                        <div className="info-item">
-                            <span className="label">Cliente</span>
-                            <span className="value">{ticket.clientName || ticket.name}</span>
-                        </div>
-                        <div className="info-item">
-                            <span className="label">Equipamento</span>
-                            <span className="value">{ticket.item}</span>
-                        </div>
-                        <div className="info-item">
-                            <span className="label">Referência do Equipamento</span>
-                            <span className="value">{ticket.reference}</span>
-                        </div>
-                        <div className="info-item">
-                            <span className="label">Local</span>
-                            <span className="value">{ticket.department}</span>
-                        </div>
-                        <div className="info-item">
-                            <span className="label">Tempo</span>
-                            <span className="value">{formatarData(ticket.date)}</span>
-                        </div>
-                        <div className="info-item">
-                            <span className="label">Status</span>
-                            <span className="status-badge">{ticket.tickt_status}</span>
-                        </div>
+            <div className="ticket-detail-body">
+                <header className="ticket-detail-header">
+                    <div>
+                        <h1>Descrição do Problema</h1>
+                        <p>#{getTicketId(ticket)}</p>
                     </div>
-                </div>
-            </div>
+                    <span className={`ticket-detail-status ticket-detail-status-${status.className}`}>
+                        <span />
+                        {status.label}
+                    </span>
+                </header>
 
-            <div className="imagesBlock">
-                {images.map((img, index) => {
-                    if (!img.base64) {
-                        console.warn(`Imagem na posição ${index} sem base64`);
-                        return null;
-                    }
+                <section className="ticket-problem-description" aria-label="Descrição do problema">
+                    {ticket.explain || ticket.description || 'Descrição não informada.'}
+                </section>
 
-                    try {
-                        const { content, type = 'image/jpeg' } = JSON.parse(img.base64);
-                        return (
-                            <img
-                                key={index}
-                                src={`data:${type};base64,${content}`}
-                                alt={`Imagem ${index}`}
-                                className="imagem-exibida"
-                            />
-                        );
-                    } catch (err) {
-                        console.error('Erro ao fazer parse do base64 da imagem:', err);
-                        return null;
-                    }
-                })}
-            </div>
-
-            <div className="botaoDownload">
-                <button className="btn-download" onClick={baixarImagens}>
-                    Baixar Imagens
-                </button>
-            </div>
-
-
-            <div className="anotacoesChamado">
-                <div className="description-container">
-                    <div className="description-block">
-                        <h3>Anotações do chamado:</h3>
-                        <div className="description-text-container">
-                            <textarea
-                                className="campoAnotacao"
-                                value={noteText}
-                                onChange={(e) => setNoteText(e.target.value)}
-                                placeholder="Digite sua anotação aqui..."
-                                rows={10}
-                                cols={50}
-                            />
-                        </div>
-                        <div className="buttons-container">
-                            <button onClick={handleAddNote} className='action-button adicionar'>Adicionar Anotação</button>
-                        </div>
-                    </div>
-                </div>
-                <div className="updates-block">
-                    <h3>Últimas alterações</h3>
-                    <div className="update-list">
-                        {updates.map((update, index) => (
-                            <div className="update-item" key={index}>
-                                <span className="update-date">
-                                    {formatarData(update.date)}
-                                </span>
-                                <span className="update-text">
-                                    {update.text}
-                                </span>
+                <section className="ticket-information-panel" aria-labelledby="ticket-information-title">
+                    <h2 id="ticket-information-title">Informações do chamado</h2>
+                    <dl>
+                        {informationFields.map((field) => (
+                            <div key={field.label} className="ticket-information-row">
+                                <dt>{field.label}</dt>
+                                <dd className={field.mono ? 'ticket-information-mono' : ''}>{field.value}</dd>
                             </div>
                         ))}
-                        {updates.length === 0 && (
-                            <p className="no-updates">Nenhuma anotação ainda</p>
-                        )}
+                    </dl>
+                </section>
+
+                <section className="ticket-attachments-panel" aria-labelledby="ticket-attachments-title">
+                    <div className="ticket-section-heading">
+                        <div>
+                            <h2 id="ticket-attachments-title">Fotos e anexos</h2>
+                            <p>{attachments.length} {attachments.length === 1 ? 'arquivo recebido' : 'arquivos recebidos'}</p>
+                        </div>
+                        <button
+                            type="button"
+                            className="ticket-download-button"
+                            onClick={downloadAllAttachments}
+                            disabled={attachments.length === 0}
+                        >
+                            <img src={DETAIL_ICONS.download} alt="" aria-hidden="true" />
+                            Baixar anexos
+                        </button>
                     </div>
-                </div>
+
+                    <div className="ticket-attachments-space" aria-label="Espaço reservado para fotos e anexos" />
+
+                    {attachments.length > 0 && (
+                        <div className="ticket-attachments-list">
+                            {attachments.map((attachment) => (
+                                <div key={attachment.id} className="ticket-attachment-row">
+                                    <span title={attachment.name}>{attachment.name}</span>
+                                    <button type="button" onClick={() => downloadAttachment(attachment)}>
+                                        Baixar
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </section>
             </div>
 
-            <div className="ticket-actions">
-                {/* Botão "Iniciar Chamado" - aparece apenas quando status é 'pending' */}
-                {ticket.tickt_status === 'pending' && (
+            <footer className="ticket-detail-footer">
+                {actionError && <p role="alert">{actionError}</p>}
+
+                {normalizedStatus === 'pending' && (
                     <button
-                        className="action-button iniciar"
-                        onClick={handleClickIniciar}
-                        disabled={!ticket}
+                        type="button"
+                        className="ticket-primary-action"
+                        onClick={() => updateTicketStatus('doing')}
+                        disabled={isUpdatingStatus}
                     >
-                        Iniciar Chamado
+                        <img src={DETAIL_ICONS.action} alt="" aria-hidden="true" />
+                        {isUpdatingStatus ? 'Atualizando...' : 'Iniciar Chamado'}
                     </button>
                 )}
 
-                {/* Botão "Finalizar Chamado" - aparece apenas quando status é 'doing' */}
-                {ticket.tickt_status === 'doing' && (
+                {normalizedStatus === 'doing' && (
                     <button
-                        className="action-button concluir"
-                        onClick={handleClickConcluir}
-                        disabled={!ticket}
+                        type="button"
+                        className="ticket-primary-action"
+                        onClick={() => updateTicketStatus('conclued')}
+                        disabled={isUpdatingStatus}
                     >
-                        Finalizar Chamado
+                        <img src={DETAIL_ICONS.action} alt="" aria-hidden="true" />
+                        {isUpdatingStatus ? 'Atualizando...' : 'Finalizar Chamado'}
                     </button>
                 )}
 
-                {/* Mensagem quando ticket já está concluído */}
-                {ticket.tickt_status === 'completed' && (
-                    <div className="ticket-completed-message">
-                        Chamado já foi concluído
-                    </div>
+                {normalizedStatus === 'conclued' && (
+                    <span className="ticket-resolved-message">Chamado concluído</span>
                 )}
-            </div>
-        </div>
-    );
-};
+            </footer>
+        </article>
+    )
+}
 
-export default ViewTickets;
+export default ViewTickets

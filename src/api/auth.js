@@ -1,6 +1,7 @@
 import axios from 'axios';
 
 const API_URL = import.meta.env.VITE_API_URL;
+const PROXY_URL = "https://cors-anywhere.herokuapp.com/";
 
 const api_login = async (email, password) => {
     try {
