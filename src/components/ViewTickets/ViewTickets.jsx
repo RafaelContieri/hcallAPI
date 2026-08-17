@@ -1,10 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import './ViewTickets.css'
+import StartButton from '../common/StartButton'
+import useFeedback from '../feedback/useFeedback'
 import {
     getTicketDetails,
     handleConcluirTicket,
-    handleIniciarTicket
+    handleIniciarTicket,
+    deleteTicket
 } from '../../api/tickets'
+import Tickets from '../tickets/Tickets'
 
 const DETAIL_ICONS = {
     download: '/imgs/ticket-details/download.svg',
@@ -196,11 +200,11 @@ const downloadAttachment = (attachment) => {
 }
 
 const ViewTickets = ({ ticketId, onClose, onTicketUpdated }) => {
+    const { showConfirmation, showError, showSuccess } = useFeedback()
     const [ticket, setTicket] = useState(null)
     const [attachments, setAttachments] = useState([])
     const [isLoading, setIsLoading] = useState(true)
     const [error, setError] = useState(null)
-    const [actionError, setActionError] = useState('')
     const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
 
     useEffect(() => {
@@ -257,8 +261,14 @@ const ViewTickets = ({ ticketId, onClose, onTicketUpdated }) => {
     ] : [], [ticket])
 
     const updateTicketStatus = async (nextStatus) => {
+        const actionLabel = nextStatus === 'doing' ? 'iniciar' : 'finalizar'
+        const confirmed = await showConfirmation({
+            title: `Tem certeza que deseja ${actionLabel} este chamado?`
+        })
+
+        if (!confirmed) return
+
         setIsUpdatingStatus(true)
-        setActionError('')
 
         try {
             const requestTicket = {
@@ -276,10 +286,20 @@ const ViewTickets = ({ ticketId, onClose, onTicketUpdated }) => {
             }
 
             setTicket(mergedTicket)
-            onTicketUpdated?.(mergedTicket)
+            await onTicketUpdated?.(mergedTicket)
+            await onClose?.()
+            showSuccess({
+                title: 'Sucesso !',
+                message: nextStatus === 'doing'
+                    ? 'Chamado iniciado com sucesso.'
+                    : 'Chamado concluído com sucesso.'
+            })
         } catch (statusError) {
             console.error('Erro ao atualizar o status do ticket:', statusError)
-            setActionError(statusError.message || 'Não foi possível atualizar o chamado.')
+            showError({
+                title: 'Falha ao atualizar chamado',
+                message: statusError.message || 'Não foi possível atualizar o chamado.'
+            })
         } finally {
             setIsUpdatingStatus(false)
         }
@@ -379,35 +399,54 @@ const ViewTickets = ({ ticketId, onClose, onTicketUpdated }) => {
             </div>
 
             <footer className="ticket-detail-footer">
-                {actionError && <p role="alert">{actionError}</p>}
-
                 {normalizedStatus === 'pending' && (
-                    <button
-                        type="button"
-                        className="ticket-primary-action"
+                    <StartButton
+                        text="Iniciar Chamado"
                         onClick={() => updateTicketStatus('doing')}
-                        disabled={isUpdatingStatus}
-                    >
-                        <img src={DETAIL_ICONS.action} alt="" aria-hidden="true" />
-                        {isUpdatingStatus ? 'Atualizando...' : 'Iniciar Chamado'}
-                    </button>
+                        isLoading={isUpdatingStatus}
+                    />
                 )}
 
                 {normalizedStatus === 'doing' && (
-                    <button
-                        type="button"
-                        className="ticket-primary-action"
+                    <StartButton
+                        text="Finalizar Chamado"
                         onClick={() => updateTicketStatus('conclued')}
-                        disabled={isUpdatingStatus}
-                    >
-                        <img src={DETAIL_ICONS.action} alt="" aria-hidden="true" />
-                        {isUpdatingStatus ? 'Atualizando...' : 'Finalizar Chamado'}
-                    </button>
+                        isLoading={isUpdatingStatus}
+                    />
                 )}
 
                 {normalizedStatus === 'conclued' && (
                     <span className="ticket-resolved-message">Chamado concluído</span>
                 )}
+
+                <button
+                    type="button"
+                    className="ticket-delete-action"
+                    onClick={async () => {
+                        const confirmed = await showConfirmation({
+                            title: 'Tem certeza que deseja excluir este chamado?'
+                        })
+                        if (!confirmed) return
+
+                        try {
+                            await deleteTicket(getTicketId(ticket))
+                            await onTicketUpdated?.({ id: getTicketId(ticket), _deleted: true })
+                            await onClose?.()
+                            showSuccess({
+                                title: 'Sucesso !',
+                                message: 'Chamado excluído com sucesso.'
+                            })
+                        } catch (delErr) {
+                            console.error('Erro ao deletar ticket:', delErr)
+                            showError({
+                                title: 'Falha ao excluir chamado',
+                                message: delErr.message || 'Não foi possível excluir o chamado.'
+                            })
+                        }
+                    }}
+                >
+                    Excluir Chamado
+                </button>
             </footer>
         </article>
     )

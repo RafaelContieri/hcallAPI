@@ -1,0 +1,71 @@
+/* StartButton - Botão para iniciar/finalizar chamados */
+
+.start-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 44px;
+  padding: 10px 20px;
+  
+  /* Estilo visual */
+  background-color: #1e3a5f;
+  color: #ffffff;
+  border: none;
+  border-radius: 10px;
+  
+  /* Tipografia */
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+  
+  /* Sombra - conforme design do Figma */
+  box-shadow: 0px 1px 1.5px rgba(0, 0, 0, 0.1), 0px 1px 1px rgba(0, 0, 0, 0.1);
+  
+  /* Transição suave */
+  transition: background-color 160ms ease, opacity 160ms ease, box-shadow 160ms ease;
+  
+  /* Comportamento do cursor */
+  cursor: pointer;
+}
+
+.start-button img {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  display: block;
+}
+
+/* Estado hover */
+.start-button:hover:not(:disabled) {
+  background-color: #294c78;
+  box-shadow: 0px 2px 3px rgba(0, 0, 0, 0.15), 0px 1px 2px rgba(0, 0, 0, 0.12);
+}
+
+/* Estado ativo/pressionado */
+.start-button:active:not(:disabled) {
+  background-color: #1a2d4a;
+  box-shadow: 0px 1px 1px rgba(0, 0, 0, 0.08), inset 0px 1px 2px rgba(0, 0, 0, 0.15);
+}
+
+/* Estado desabilitado/carregando */
+.start-button:disabled {
+  opacity: 0.65;
+  cursor: wait;
+  background-color: #1e3a5f;
+}
+
+/* Foco (acessibilidade) */
+.start-button:focus-visible {
+  outline: 2px solid #1e88c9;
+  outline-offset: 2px;
+}
+
+/* Responsividade - em telas pequenas */
+@media (max-width: 640px) {
+  .start-button {
+    width: 100%;
+    min-height: 44px;
+  }
+}

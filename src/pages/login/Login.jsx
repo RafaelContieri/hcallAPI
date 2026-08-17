@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api_login } from "../../api/auth";
+import useFeedback from "../../components/feedback/useFeedback";
 import "./Login.css";
 
 const heroImage = "https://www.figma.com/api/mcp/asset/a5d6dea4-5c4e-459b-84c6-9de87b78097e.svg";
@@ -10,12 +11,12 @@ const showIcon = "https://www.figma.com/api/mcp/asset/1ddf9394-52c3-4605-b80d-49
 
 const LoginForm = () => {
     const navigate = useNavigate();
+    const { showError } = useFeedback();
     const [formData, setFormData] = useState({
         email: "",
         password: ""
     });
     const [showPassword, setShowPassword] = useState(false);
-    const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
 
     const handleChange = (e) => {
@@ -32,7 +33,6 @@ const LoginForm = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        setError("");
         setLoading(true);
 
         try {
@@ -40,10 +40,16 @@ const LoginForm = () => {
             if (result.success) {
                 navigate("/dashboard");
             } else {
-                setError(result.error || "Erro ao fazer login");
+                showError({
+                    title: "Falha no login",
+                    message: result.error || "Não foi possível entrar com os dados informados."
+                });
             }
         } catch (err) {
-            setError("Erro ao conectar com o servidor");
+            showError({
+                title: "Falha no login",
+                message: "Erro ao conectar com o servidor. Tente novamente."
+            });
         } finally {
             setLoading(false);
         }
@@ -63,8 +69,6 @@ const LoginForm = () => {
                         <div className="form-header">
                             <h2>Realize seu login</h2>
                         </div>
-
-                        {error && <p className="error-message">{error}</p>}
 
                         <form onSubmit={handleSubmit} className="login-form">
                             <div className="input-group">

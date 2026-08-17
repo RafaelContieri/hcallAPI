@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import './Account-create.css'
 import { createUser } from '../../api/createUser'
+import useFeedback from '../feedback/useFeedback'
 
 const FORM_ICONS = {
     back: '/imgs/user-create/back.svg',
@@ -35,9 +36,8 @@ const formatPhone = (value) => {
 }
 
 const AccountCreate = ({ onCancel, onCreated }) => {
+    const { showConfirmation, showError, showSuccess, showWarning } = useFeedback()
     const [formData, setFormData] = useState(EMPTY_FORM)
-    const [apiError, setApiError] = useState('')
-    const [successMessage, setSuccessMessage] = useState('')
     const [isLoading, setIsLoading] = useState(false)
     const [showPassword, setShowPassword] = useState(false)
     const [avatarPreview, setAvatarPreview] = useState('')
@@ -54,8 +54,6 @@ const AccountCreate = ({ onCancel, onCreated }) => {
             ...current,
             [name]: name === 'phone' ? formatPhone(value) : value
         }))
-        setApiError('')
-        setSuccessMessage('')
     }
 
     const handleAvatarChange = (event) => {
@@ -63,20 +61,25 @@ const AccountCreate = ({ onCancel, onCreated }) => {
         if (!file) return
 
         if (!file.type.startsWith('image/')) {
-            setApiError('Selecione um arquivo de imagem válido.')
+            showWarning({
+                title: 'Preencha as informações corretas',
+                message: 'Selecione um arquivo de imagem válido.'
+            })
             event.target.value = ''
             return
         }
 
         if (file.size > 5 * 1024 * 1024) {
-            setApiError('A foto deve possuir no máximo 5 MB.')
+            showWarning({
+                title: 'Preencha as informações corretas',
+                message: 'A foto deve possuir no máximo 5 MB.'
+            })
             event.target.value = ''
             return
         }
 
         if (avatarPreview.startsWith('blob:')) URL.revokeObjectURL(avatarPreview)
         setAvatarPreview(URL.createObjectURL(file))
-        setApiError('')
     }
 
     const validateForm = () => {
@@ -95,12 +98,13 @@ const AccountCreate = ({ onCancel, onCreated }) => {
         const validationError = validateForm()
 
         if (validationError) {
-            setApiError(validationError)
+            showWarning({
+                title: 'Preencha as informações corretas',
+                message: validationError
+            })
             return
         }
 
-        setApiError('')
-        setSuccessMessage('')
         setIsLoading(true)
 
         const payload = {
@@ -120,20 +124,37 @@ const AccountCreate = ({ onCancel, onCreated }) => {
 
             setFormData({ ...EMPTY_FORM })
             setAvatarPreview('')
-            setSuccessMessage('Usuário criado com sucesso!')
-            onCreated?.(result.data)
+            showSuccess({
+                title: 'Sucesso !',
+                message: 'Usuário criado com sucesso!',
+                onClose: () => onCreated?.(result.data)
+            })
         } catch (error) {
-            setApiError(error.message || 'Não foi possível criar o usuário.')
+            showError({
+                title: 'Falha ao criar usuário',
+                message: error.message || 'Não foi possível criar o usuário.'
+            })
         } finally {
             setIsLoading(false)
         }
     }
 
-    const handleCancel = () => {
+    const handleCancel = async () => {
         if (isLoading) return
+
+        const hasUnsavedData = Boolean(
+            formData.name || formData.email || formData.phone || formData.password || avatarPreview
+        )
+
+        if (hasUnsavedData) {
+            const confirmed = await showConfirmation({
+                title: 'Tem certeza que deseja cancelar este cadastro?'
+            })
+
+            if (!confirmed) return
+        }
+
         setFormData({ ...EMPTY_FORM })
-        setApiError('')
-        setSuccessMessage('')
         setAvatarPreview('')
         onCancel?.()
     }
@@ -184,15 +205,6 @@ const AccountCreate = ({ onCancel, onCreated }) => {
                     </header>
 
                     <div className="create-user-divider" />
-
-                    {(apiError || successMessage) && (
-                        <div
-                            className={`create-user-message ${apiError ? 'create-user-message-error' : 'create-user-message-success'}`}
-                            role={apiError ? 'alert' : 'status'}
-                        >
-                            {apiError || successMessage}
-                        </div>
-                    )}
 
                     <div className="create-user-fields">
                         <label className="create-user-field" htmlFor="create-user-name">

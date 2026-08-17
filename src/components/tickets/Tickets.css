@@ -121,6 +121,31 @@
     gap: 10px;
 }
 
+.ticket-right-header {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.ticket-delete-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    border: none;
+    background: transparent;
+    color: #b42318;
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.ticket-delete-button:hover {
+    background: rgba(180, 35, 24, 0.06);
+}
+
 .ticket-id {
     display: flex;
     min-width: 0;
@@ -296,6 +321,27 @@
     .tickets-list {
         grid-template-columns: 1fr;
     }
+}
+
+.tickets-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-top: 18px;
+}
+
+.tickets-pagination button {
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(30,58,95,0.08);
+    background: #fff;
+    cursor: pointer;
+}
+
+.tickets-pagination .pagination-info {
+    color: #6b7a99;
+    font-size: 14px;
 }
 
 @media (max-width: 460px) {

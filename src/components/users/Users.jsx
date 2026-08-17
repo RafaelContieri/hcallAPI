@@ -2,15 +2,14 @@ import React, { useState, useEffect } from 'react';
 import './Users.css';
 import AccountCreate from '../account-create/Account-create';
 import { getUsers, deleteUser } from '../../api/createUser';
-import Modal from '../modal/Modal';
+import useFeedback from '../feedback/useFeedback';
 
 const Users = () => {
+    const { showConfirmation, showError, showSuccess, showWarning } = useFeedback();
     const [users, setUsers] = useState([]);
     const [showCreateAccount, setShowCreateAccount] = useState(false);
-    const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [userToDelete, setUserToDelete] = useState(null);
     const [isDeleting, setIsDeleting] = useState(false);
-    const [error, setError] = useState(null);
 
     useEffect(() => {
         fetchUsers();
@@ -23,46 +22,60 @@ const Users = () => {
             setUsers(data);
         } catch (error) {
             console.error('Erro ao buscar usuários:', error);
-            setError('Falha ao carregar usuários');
+            showError({
+                title: 'Falha ao carregar usuários',
+                message: error.message || 'Não foi possível carregar a lista de usuários.'
+            });
         }
     };
 
-    const handleDeleteClick = (user) => {
+    const handleDeleteClick = async (user) => {
         console.log("Usuário para deletar:", user);
 
-        // Verifica APENAS id (não verifica _id)
-        if (!user.id) {
-            console.error("Usuário não tem ID válido:", user);
-            setError('Usuário não possui identificador válido');
+        if (!user.email) {
+            console.error("Usuário não tem e-mail válido:", user);
+            showWarning({
+                title: 'Não foi possível continuar',
+                message: 'Usuário não possui um e-mail válido para exclusão.'
+            });
             return;
         }
 
-        setUserToDelete(user);
-        setShowDeleteModal(true);
-    };
-    const handleConfirmDelete = async () => {
-        if (!userToDelete) return;
+        const confirmed = await showConfirmation({
+            title: `Tem certeza que deseja excluir ${user.name || 'este usuário'}?`
+        });
 
+        if (!confirmed) return;
+
+        setUserToDelete(user);
         setIsDeleting(true);
-        setError(null);
 
         try {
-            const userId = userToDelete.email;
+            const userId = user.email;
             if (!userId) throw new Error('ID do usuário não encontrado');
 
             const result = await deleteUser(userId);
 
             if (result.success) {
-                setUsers(users.filter(u => u.email !== userId));
+                setUsers((currentUsers) => currentUsers.filter(u => u.email !== userId));
+                showSuccess({
+                    title: 'Sucesso !',
+                    message: 'Usuário excluído com sucesso.'
+                });
             } else {
-                setError(result.error || 'Erro ao excluir usuário');
+                showError({
+                    title: 'Falha ao excluir usuário',
+                    message: result.error || 'Não foi possível excluir o usuário.'
+                });
             }
         } catch (error) {
             console.error('Erro ao excluir:', error);
-            setError(error.message || 'Erro ao excluir usuário');
+            showError({
+                title: 'Falha ao excluir usuário',
+                message: error.message || 'Não foi possível excluir o usuário.'
+            });
         } finally {
             setIsDeleting(false);
-            setShowDeleteModal(false);
             setUserToDelete(null);
         }
     };
@@ -93,8 +106,6 @@ const Users = () => {
                 </button>
             </div>
 
-            {error && <div className="error-message">{error}</div>}
-
             <div className="users-grid">
                 {Array.isArray(users) && users.map(user => (
                     <div className="user-block" key={user._id || user.id || user.email}>
@@ -118,8 +129,7 @@ const Users = () => {
                                     className="action-btn delete"
                                     disabled={isDeleting}
                                 >
-                                    {isDeleting && userToDelete &&
-                                        (user._id === userToDelete.id || user.id === userToDelete.id)
+                                    {isDeleting && userToDelete?.email === user.email
                                         ? 'Excluindo...'
                                         : 'Excluir'}
                                 </button>
@@ -129,19 +139,6 @@ const Users = () => {
                 ))}
             </div>
 
-            <Modal
-                isOpen={showDeleteModal}
-                onClose={() => {
-                    setShowDeleteModal(false);
-                    setUserToDelete(null);
-                }}
-                onConfirm={handleConfirmDelete}
-                title="Confirmar Exclusão"
-                message={`Tem certeza que deseja excluir ${userToDelete?.name} (${userToDelete?.email})?`}
-                confirmText={isDeleting ? 'Excluindo...' : 'Confirmar'}
-                cancelText="Cancelar"
-                isConfirmDisabled={isDeleting || !userToDelete}
-            />
         </div>
     );
 };

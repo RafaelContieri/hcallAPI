@@ -1,12 +1,22 @@
 import React from 'react'
 import { useNavigate } from 'react-router-dom'
+import useFeedback from '../feedback/useFeedback'
 import './Titlebar.css'
 
 const Titlebar = ({ userName, pageTitle = 'Home' }) => {
     const navigate = useNavigate()
+    const { showConfirmation } = useFeedback()
 
-    const handleLogout = () => {
-        navigate('/login')
+    const handleLogout = async () => {
+        const confirmed = await showConfirmation({
+            title: 'Tem certeza que deseja sair do sistema?'
+        })
+
+        if (!confirmed) return
+
+        localStorage.removeItem('@token')
+        localStorage.removeItem('usuario')
+        navigate('/login', { replace: true })
     }
 
     return (

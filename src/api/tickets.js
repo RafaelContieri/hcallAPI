@@ -198,26 +198,45 @@ const handleConcluirTicket = async (ticket) => {
  * @returns {Promise<Object>} - Objeto contendo todos os dados do ticket em JSON
  * @throws {Error} - Erro caso o ID seja inválido ou a requisição falhe
  */
+
+const mensagemPadrao = "ticket deletado pelo usuário";
+
 async function fetchTicketData(ticketId) {
+  
+
   try {
     // 1. Faz a requisição para a API que retorna os detalhes do ticket
     const response = await api.get('/ticket/details', {
       params: { id: ticketId }
     });
-
-    // 2. Verifica se a resposta contém dados válidos
-    if (!response.data) {
-      throw new Error('Nenhum dado encontrado para o ticket especificado');
-    }
-
-    // 3. Retorna todos os dados em formato JSON
     return response.data;
-
   } catch (error) {
     console.error('Erro ao buscar dados do ticket:', error);
-    throw error; // Rejeita a promise com o erro para tratamento externo
+    throw error;
   }
 }
+
+/**
+ * Função para deletar um ticket usando o endpoint DELETE /ticket (rota protegida)
+ * @param {string} ticketId - ID do ticket a ser deletado (UUID ou número)
+ * @returns {Promise<Object>} - Resposta do servidor após deletar o ticket
+ * @throws {Error} - Se o ID não for fornecido ou ocorrer erro na requisição
+ * @note O JWT é passado automaticamente no header Authorization pelo interceptor
+ */
+async function deleteTicket(ticketId) {
+  if (!ticketId) throw new Error('ID do ticket não fornecido');
+  try {
+    const response = await api.delete('/ticket/', { 
+      data: { id: ticketId } 
+      // JWT é adicionado automaticamente pelo interceptor ao header Authorization
+    });
+    return response.data;
+  } catch (err) {
+    const serverMessage = err?.response?.data?.message || err?.response?.data || err?.message;
+    throw new Error(serverMessage || 'Erro ao deletar ticket');
+  }
+}
+
 
 
 
@@ -231,5 +250,6 @@ export {
   updateTicketStatus,
   handleConcluirTicket,
   handleIniciarTicket,
-  fetchTicketData
+  fetchTicketData,
+  deleteTicket
 };

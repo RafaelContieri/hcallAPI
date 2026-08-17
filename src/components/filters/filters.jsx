@@ -3,7 +3,7 @@ import './filters.css'
 
 const FILTER_ICONS = {
     name: '/imgs/tickets/search.svg',
-    author: '/imgs/tickets/author-filter.svg',
+    author: '/imgs/tickets/author.svg',
     date: '/imgs/tickets/calendar-filter.svg'
 }
 
@@ -11,22 +11,22 @@ function Filters({ filtros, onFiltroChange }) {
     return (
         <section className="tickets-filters" aria-label="Filtros de chamados">
             <label className="ticket-filter-field">
-                <span className="sr-only">Nome do chamado</span>
+                <span className="sr-only">Código Chamado</span>
                 <img src={FILTER_ICONS.name} alt="" aria-hidden="true" />
                 <input
                     type="search"
-                    placeholder="Nome do chamado..."
+                    placeholder="Código Chamado"
                     value={filtros.name}
                     onChange={(event) => onFiltroChange('name', event.target.value)}
                 />
             </label>
 
             <label className="ticket-filter-field">
-                <span className="sr-only">Email do autor</span>
+                <span className="sr-only">Nome do autor</span>
                 <img src={FILTER_ICONS.author} alt="" aria-hidden="true" />
                 <input
-                    type="email"
-                    placeholder="Email do autor..."
+                    type="text"
+                    placeholder="Autor..."
                     value={filtros.author}
                     onChange={(event) => onFiltroChange('author', event.target.value)}
                 />
