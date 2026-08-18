@@ -85,7 +85,7 @@ async function getUsers() {
             throw new Error('Token não encontrado');
         }
 
-        const fullUrl = `${API_URL}/user/all`;
+        const fullUrl = `${API_URL}/user/controler`;
         console.log('[getUsers] URL completa:', fullUrl);
 
         const response = await fetch(fullUrl, {

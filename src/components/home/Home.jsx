@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { MdFormatListBulleted, MdOutlineNewReleases, MdPendingActions, MdTaskAlt } from 'react-icons/md'
 import './Home.css'
-import { getTickets, countTickets } from '../../api/tickets'
+import { getTickets } from '../../api/tickets'
 import Grafico from '../grafico/Grafico'
 
 const EMPTY_TICKET_COUNTS = {
@@ -25,72 +25,6 @@ const normalizeStatus = (status) => String(status || '')
   .trim()
   .toLowerCase()
   .replace(/[\s-]+/g, '_')
-
-const extractTickets = (response) => {
-  const possibleLists = [
-    response?.data?.data?.tickets,
-    response?.data?.tickets,
-    response?.tickets,
-    response?.data?.data,
-    response?.data,
-    response
-  ]
-
-  return possibleLists.find(Array.isArray) ?? []
-}
-
-const getTicketIdentifier = (ticket) => (
-  ticket?.id ??
-  ticket?._id ??
-  ticket?.ticketId ??
-  ticket?.ticket_id ??
-  ticket?.tickt_id ??
-  null
-)
-
-const getTicketUpdateTimestamp = (ticket) => {
-  const date = (
-    ticket?.updatedAt ??
-    ticket?.updated_at ??
-    ticket?.modifiedAt ??
-    ticket?.modified_at ??
-    ticket?.date
-  )
-  const timestamp = new Date(date).getTime()
-
-  return Number.isFinite(timestamp) ? timestamp : 0
-}
-
-/**
- * Garante que cada chamado seja contado uma única vez. Caso a API devolva
- * versões repetidas do mesmo ID após uma mudança de status, conserva a mais
- * recente para que o chamado apenas mude de categoria.
- */
-const getUniqueTickets = (tickets) => {
-  const ticketsById = new Map()
-  const ticketsWithoutId = []
-
-  tickets.forEach((ticket) => {
-    const identifier = getTicketIdentifier(ticket)
-
-    if (identifier === null || identifier === undefined || identifier === '') {
-      ticketsWithoutId.push(ticket)
-      return
-    }
-
-    const key = String(identifier)
-    const currentTicket = ticketsById.get(key)
-
-    if (
-      !currentTicket ||
-      getTicketUpdateTimestamp(ticket) >= getTicketUpdateTimestamp(currentTicket)
-    ) {
-      ticketsById.set(key, ticket)
-    }
-  })
-
-  return [...ticketsById.values(), ...ticketsWithoutId]
-}
 
 const getTicketTimestamp = (ticket) => {
   const date = ticket?.date ?? ticket?.createdAt ?? ticket?.created_at
@@ -129,31 +63,28 @@ const calculateCountsFromTickets = (tickets) => tickets.reduce((counts, ticket) 
   return counts
 }, { ...EMPTY_TICKET_COUNTS })
 
-const getApiCount = (source, keys) => {
-  for (const key of keys) {
-    const rawValue = source?.[key]
-    const value = Number(rawValue)
+const normalizeCountPayload = (payload = {}) => {
+  const source = payload?.data?.data ?? payload?.data ?? payload ?? {}
 
-    if (rawValue !== undefined && rawValue !== null && rawValue !== '' && Number.isFinite(value) && value >= 0) {
-      return value
-    }
+  const toNumber = (value) => {
+    const number = Number(value)
+    return Number.isFinite(number) ? number : 0
   }
 
-  return null
-}
+  const total = toNumber(source.total ?? source.all ?? source.count ?? 0)
+  const newValue = toNumber(source.doing ?? source.inProgress ?? source.in_progress ?? source.new ?? source.andamento ?? 0)
+  const pending = toNumber(source.pending ?? source.pendente ?? source.pendentes ?? source.open ?? source.aberto ?? 0)
+  const completed = toNumber(
+    source.conclued ?? source.concluded ?? source.completed ?? source.done ?? source.concluido ?? source.concluidos ?? source.fechado ?? 0
+  )
 
-const normalizeApiCounts = (response, calculatedCounts) => {
-  const source = response?.data?.data ?? response?.data ?? response ?? {}
-  const newCount = getApiCount(source, ['doing', 'inProgress', 'in_progress', 'new', 'andamento'])
-  const pending = getApiCount(source, ['pending', 'pendentes', 'pendente', 'open'])
-  const completed = getApiCount(source, ['conclued', 'concluded', 'completed', 'done'])
-  const categoryTotal = (newCount ?? 0) + (pending ?? 0) + (completed ?? 0)
+  const finalTotal = total || newValue + pending + completed
 
   return {
-    all: getApiCount(source, ['total', 'all']) ?? Math.max(calculatedCounts.all, categoryTotal),
-    new: newCount ?? calculatedCounts.new,
-    pending: pending ?? calculatedCounts.pending,
-    completed: completed ?? calculatedCounts.completed
+    all: finalTotal,
+    new: newValue,
+    pending,
+    completed
   }
 }
 
@@ -169,40 +100,27 @@ const Home = ({ onNavigate }) => {
     setLoadingTickets(true)
 
     const fetchDashboardData = async () => {
-      const [countsResult, ticketsResult] = await Promise.allSettled([
-        countTickets(),
-        getTickets()
-      ])
+      try {
+        const tickets = await getTickets()
 
-      const tickets = ticketsResult.status === 'fulfilled'
-        ? getUniqueTickets(extractTickets(ticketsResult.value))
-        : []
-      const calculatedCounts = calculateCountsFromTickets(tickets)
-      const fallbackCounts = countsResult.status === 'fulfilled'
-        ? normalizeApiCounts(countsResult.value, EMPTY_TICKET_COUNTS)
-        : EMPTY_TICKET_COUNTS
+        if (!active) return
 
-      if (countsResult.status === 'rejected') {
-        console.error('Erro ao buscar a contagem de tickets:', countsResult.reason)
-      }
-
-      if (ticketsResult.status === 'rejected') {
-        console.error('Erro ao buscar a lista de tickets:', ticketsResult.reason)
-      }
-
-      if (active && ticketsResult.status === 'fulfilled') {
-        setTicketCounts(calculatedCounts)
-      } else if (active && countsResult.status === 'fulfilled') {
-        setTicketCounts(fallbackCounts)
-      }
-
-      if (active && ticketsResult.status === 'fulfilled') {
+        const nextCounts = calculateCountsFromTickets(tickets)
+        setTicketCounts(nextCounts)
         setAllTickets(tickets)
         setRecentTickets(getRecentTickets(tickets))
-      }
+      } catch (error) {
+        console.error('Erro ao buscar a lista de tickets:', error)
 
-      if (active) {
-        setLoadingTickets(false)
+        if (active) {
+          setTicketCounts(EMPTY_TICKET_COUNTS)
+          setAllTickets([])
+          setRecentTickets([])
+        }
+      } finally {
+        if (active) {
+          setLoadingTickets(false)
+        }
       }
     }
 

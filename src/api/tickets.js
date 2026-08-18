@@ -35,19 +35,93 @@ api.interceptors.response.use(
   }
 );
 
+const extractTicketList = (payload) => {
+  const possibleLists = [
+    payload?.data?.tickets,
+    payload?.data?.list,
+    payload?.data?.items,
+    payload?.data?.results,
+    payload?.data?.rows,
+    payload?.tickets,
+    payload?.list,
+    payload?.items,
+    payload?.results,
+    payload?.rows,
+    payload?.data,
+    payload
+  ];
+
+  const directList = possibleLists.find(Array.isArray);
+  if (directList) return directList;
+
+  if (payload && typeof payload === 'object') {
+    const nestedList = Object.values(payload).find(Array.isArray);
+    if (nestedList) return nestedList;
+  }
+
+  return [];
+};
+
+const getTicketIdentifier = (ticket) => (
+  ticket?.id ??
+  ticket?._id ??
+  ticket?.ticketId ??
+  ticket?.ticket_id ??
+  ticket?.tickt_id ??
+  null
+);
+
+const getTicketUpdateTimestamp = (ticket) => {
+  const date = (
+    ticket?.updatedAt ??
+    ticket?.updated_at ??
+    ticket?.modifiedAt ??
+    ticket?.modified_at ??
+    ticket?.date
+  );
+  const timestamp = new Date(date).getTime();
+
+  return Number.isFinite(timestamp) ? timestamp : 0;
+};
+
+const normalizeTicketList = (payload) => {
+  const ticketsById = new Map();
+  const ticketsWithoutId = [];
+
+  extractTicketList(payload).forEach((ticket) => {
+    const identifier = getTicketIdentifier(ticket);
+
+    if (identifier === null || identifier === undefined || identifier === '') {
+      ticketsWithoutId.push(ticket);
+      return;
+    }
+
+    const key = String(identifier);
+    const currentTicket = ticketsById.get(key);
+
+    if (
+      !currentTicket ||
+      getTicketUpdateTimestamp(ticket) >= getTicketUpdateTimestamp(currentTicket)
+    ) {
+      ticketsById.set(key, ticket);
+    }
+  });
+
+  return [...ticketsById.values(), ...ticketsWithoutId];
+};
+
 /**
- * Função para buscar todos os tickets do usuário
- * @returns {Promise<Array>} - Lista de tickets do usuário
+ * Função para buscar todos os tickets do sistema
+ * @returns {Promise<Array>} - Lista completa de tickets
  * @throws {Error} - Erro caso o token não seja encontrado ou a requisição falhe
  */
 async function getTickets() {
   try {
-    const response = await api.get('/ticket/');
-    return response.data;
+    const response = await api.get('/ticket/all');
+    return normalizeTicketList(response.data);
   } catch (error) {
     throw new Error(error.response?.data?.message || 'Erro ao buscar tickets');
   }
-
 }
 
 /**
@@ -57,8 +131,24 @@ async function getTickets() {
  */
 async function countTickets(filters = {}) {
   try {
-    const response = await api.get('/ticket/count', { params: filters });
-    return response.data;
+    const response = await api.get('/ticket/all', { params: filters });
+    const tickets = normalizeTicketList(response.data);
+    return {
+      total: tickets.length,
+      doing: tickets.filter(ticket => {
+        const status = normalizeStatus(ticket?.tickt_status ?? ticket?.status ?? ticket?.situacao)
+        return ['doing', 'in_progress', 'em_andamento', 'andamento'].includes(status)
+      }).length,
+      pending: tickets.filter(ticket => {
+        const status = normalizeStatus(ticket?.tickt_status ?? ticket?.status ?? ticket?.situacao)
+        return ['pending', 'pendente', 'pendentes', 'open', 'aberto'].includes(status)
+      }).length,
+      conclued: tickets.filter(ticket => {
+        const status = normalizeStatus(ticket?.tickt_status ?? ticket?.status ?? ticket?.situacao)
+        return ['conclued', 'concluded', 'completed', 'done', 'concluido', 'concluidos', 'fechado'].includes(status)
+      }).length,
+      all: tickets.length
+    };
   } catch (error) {
     throw new Error(error.response?.data?.message || 'Erro ao contar tickets');
   }
